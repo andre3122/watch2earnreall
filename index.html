@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+  <title>Watch2EarnReall — Telegram Mini App</title>
+  <meta name="theme-color" content="#12d8fa"/>
+  <meta name="color-scheme" content="light only"/>
+
+  <!-- Telegram Mini App SDK -->
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+  <!-- Monetag Mini App SDK (SET) -->
+  <script src="//libtl.com/sdk.js" data-zone="9726748" data-sdk="show_9726748"></script>
+
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://unpkg.com/@fontsource/poppins@5.0.8/400.css" rel="stylesheet">
+  <link href="https://unpkg.com/@fontsource/poppins@5.0.8/600.css" rel="stylesheet">
+  <link rel="stylesheet" href="./assets/css/styles.css"/>
+</head>
+<body>
+  <div id="app" class="app">
+    <header class="app-header">
+      <div class="brand">
+        <div class="logo-glow"></div>
+        <span class="brand-title">Watch2Earn<span class="accent">Reall</span></span>
+      </div>
+      <div class="coins">
+        <span id="balance">$0.00</span>
+      </div>
+    </header>
+
+    <main class="screens">
+      <section id="screen-home" class="screen active">
+        <div class="hero-card neon-border">
+          <h1>Daily Check-In</h1>
+          <p class="muted">Check-in tiap hari untuk bonus. Kumpulkan streak untuk hadiah lebih besar.</p>
+          <div class="checkin-wrap">
+            <ul class="checkin-grid" id="checkinGrid">
+              <li data-day="1"><span>Day 1</span></li>
+              <li data-day="2"><span>Day 2</span></li>
+              <li data-day="3"><span>Day 3</span></li>
+              <li data-day="4"><span>Day 4</span></li>
+              <li data-day="5"><span>Day 5</span></li>
+              <li data-day="6"><span>Day 6</span></li>
+              <li data-day="7"><span>Day 7</span></li>
+            </ul>
+          </div>
+          <div class="checkin-actions">
+            <button id="btnCheckin" class="btn btn-primary">Check-in Hari Ini</button>
+            <div id="streakInfo" class="streak-info">Streak: <strong>0</strong> hari</div>
+          </div>
+        </div>
+
+        <div class="info-row">
+          <div class="glass card tip">
+            <h3>Tips</h3>
+            <p>Periksa <strong>Task</strong> untuk nonton iklan. Selesaikan untuk dapatkan reward cepat.</p>
+          </div>
+          <div class="glass card tip">
+            <h3>Minimum Withdraw</h3>
+            <p>Minimum withdraw adalah <strong>$1</strong> di jaringan <strong>BSC (BEP20)</strong>.</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="screen-task" class="screen">
+        <div class="section-title">
+          <h2>Task Nonton Iklan</h2>
+          <p class="muted">Selesaikan task untuk mendapatkan reward. Verifikasi dilakukan dari server.</p>
+        </div>
+
+        <div class="tasks-list">
+          <article class="task-card neon-border" data-task-id="ad1">
+            <div class="task-left">
+              <div class="task-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"></path></svg></div>
+              <div class="task-meta">
+                <h3>Nonton Iklan #1</h3>
+                <p class="muted">Durasi ~15-30 detik • Reward setelah valid</p>
+              </div>
+            </div>
+            <div class="task-right"><button class="btn btn-cta" data-action="watch">Watch Ad</button></div>
+          </article>
+
+          <article class="task-card neon-border" data-task-id="ad2">
+            <div class="task-left">
+              <div class="task-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2l1.5 6L21 9l-6 1.5L13 17l-1.5-6L5 9l6-1.5L13 2z"></path></svg></div>
+              <div class="task-meta">
+                <h3>Nonton Iklan #2</h3>
+                <p class="muted">Durasi ~15-30 detik • Reward setelah valid</p>
+              </div>
+            </div>
+            <div class="task-right"><button class="btn btn-cta" data-action="watch">Watch Ad</button></div>
+          </article>
+        </div>
+
+        <div class="legend">
+          <small>Catatan: Setelah iklan selesai, sistem akan verifikasi ke server sebelum menambah saldo.</small>
+        </div>
+      </section>
+
+      <section id="screen-referral" class="screen">
+        <div class="section-title">
+          <h2>Referral</h2>
+          <p class="muted">Undang teman untuk mendapatkan bonus dari setiap pengguna yang join dari link kamu.</p>
+        </div>
+
+        <div class="glass card">
+          <ol class="howto">
+            <li>Tap <strong>Bagikan Link</strong> untuk share.</li>
+            <li>Kirim ke teman/grup/sosmed.</li>
+            <li>Teman yang join via link akan tercatat di bawah.</li>
+          </ol>
+          <div class="ref-link-row">
+            <input id="refLink" readonly value="Generating…" />
+            <button id="btnCopyRef" class="btn">Copy</button>
+            <button id="btnShareRef" class="btn btn-primary">Bagikan</button>
+          </div>
+        </div>
+
+        <div class="glass card">
+          <div class="ref-stats">
+            <div><div class="stat-label">Teman Diundang</div><div class="stat-value" id="refCount">0</div></div>
+            <div><div class="stat-label">Bonus Referral</div><div class="stat-value" id="refBonus">$0.00</div></div>
+          </div>
+          <div class="ref-list" id="refList"></div>
+        </div>
+      </section>
+
+      <section id="screen-profile" class="screen">
+        <div class="profile-top">
+          <div class="profile-avatar" id="profileAvatar" title="Telegram Profile"></div>
+          <div class="profile-id">
+            <div id="profileName" class="profile-name">User</div>
+            <div id="profileUsername" class="profile-username">@username</div>
+          </div>
+        </div>
+
+        <div class="glass card">
+          <form id="withdrawForm" class="form">
+            <label for="withdrawAmount">Amount Withdraw (USD)</label>
+            <input id="withdrawAmount" name="amount" type="number" inputmode="decimal" min="1" step="0.01" placeholder="1.00" required />
+            <small class="muted">Minimum withdraw 1$</small>
+            <button class="btn btn-primary" type="submit">Submit Withdraw</button>
+          </form>
+        </div>
+
+        <div class="glass card">
+          <form id="addressForm" class="form">
+            <label for="bscAddress">Address (BSC BEP20)</label>
+            <input id="bscAddress" name="address" type="text" placeholder="0x..." pattern="^0x[a-fA-F0-9]40$" required />
+            <small class="muted">Masukkan alamat dompet BEP20 kamu.</small>
+            <button class="btn" type="submit">Simpan Alamat</button>
+          </form>
+        </div>
+      </section>
+    </main>
+
+    <nav class="tabbar">
+      <button class="tab active" data-target="home" aria-label="Home">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l9 8h-3v9h-5v-6H11v6H6v-9H3z"/></svg>
+        <span>Home</span>
+      </button>
+      <button class="tab" data-target="task" aria-label="Task">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 11h8v2H9v-2zm0 4h8v2H9v-2zM7 7h10v2H7V7z"/></svg>
+        <span>Task</span>
+      </button>
+      <button class="tab" data-target="referral" aria-label="Referral">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5s-3 1.34-3 3 1.34 3 3 3zm-8 0C9.66 11 11 9.66 11 8S9.66 5 8 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.67 0-8 1.34-8 4v2h10v-2c0-2.66-5.33-4-8-4zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45v2H24v-2c0-2.66-5.33-4-8-4z"/></svg>
+        <span>Referral</span>
+      </button>
+      <button class="tab" data-target="profile" aria-label="Profile">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12c2.7 0 5-2.3 5-5s-2.3-5-5-5-5 2.3-5 5 2.3 5 5 5zm0 2c-3.3 0-10 1.7-10 5v3h20v-3c0-3.3-6.7-5-10-5z"/></svg>
+        <span>Profil</span>
+      </button>
+    </nav>
+
+    <div class="modal-backdrop" id="modalBackdrop" hidden>
+      <div class="modal">
+        <h3 id="modalTitle">Konfirmasi</h3>
+        <p id="modalMsg">Tekan Selesai jika iklan sudah ditonton sampai akhir.</p>
+        <div class="modal-actions">
+          <button id="modalCancel" class="btn">Batal</button>
+          <button id="modalOk" class="btn btn-primary">Selesai</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="./assets/js/config.js"></script>
+  <script src="./assets/js/app.js" defer></script>
+</body>
+</html>
