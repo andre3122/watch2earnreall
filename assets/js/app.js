@@ -186,32 +186,49 @@
     }));
   }
 
-  async function completeTask(taskId) {
-    try {
-      const watched = await showMonetagAd();
-      if (!watched) return;
+  async function completeTask(taskId){
+  try {
+    // 1) Tampilkan iklan Monetag (kalau ada)
+    const fn = window[window.MONETAG_FN];
+    try { if (typeof fn === "function") fn(); } catch {}
 
-      // kirim ke backend (serverless vercel) – demo: akan balas credited:true
-      const data = await safeFetch(`/api/reward/complete`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id: String(state.user?.id), task_id: taskId, initData: tg?.initData || "" })
-      });
+    // 2) Langsung minta reward ke server (tanpa modal)
+    const res = await fetch(`/api/reward/complete`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        user_id: String(state.user?.id),   // pastikan string
+        task_id: taskId
+      })
+    });
+    const data = await res.json();
 
-      if (data?.credited) {
-        state.tasks[taskId].completed = true;
-        setBalance(state.balance + (state.tasks[taskId].reward || 0));
-        const btn = document.querySelector(`[data-task-id="${taskId}"] [data-action="watch"]`);
-        if (btn) btn.disabled = true;
-        toast("Reward ditambahkan!");
-      } else {
-        toast("Verifikasi gagal.");
+    if (data?.credited) {
+      // tandai selesai & tambah saldo
+      state.tasks[taskId].completed = true;
+      setBalance(state.balance + (state.tasks[taskId].reward || 0));
+
+      // matikan tombol task yg barusan
+      const btn = document.querySelector(`[data-task-id="${taskId}"] [data-action="watch"]`);
+      if (btn) btn.disabled = true;
+
+      // notifikasi kecil
+      if (window.Telegram?.WebApp?.showPopup) {
+        Telegram.WebApp.showPopup({ title: "Berhasil", message: "Reward ditambahkan!", buttons: [{id:"ok", type:"default", text:"OK"}] });
       }
-    } catch (e) {
-      console.error(e);
-      toast("Gagal konek server.");
+    } else {
+      if (window.Telegram?.WebApp?.showPopup) {
+        Telegram.WebApp.showPopup({ title: "Gagal", message: "Verifikasi gagal.", buttons: [{id:"ok", type:"default", text:"OK"}] });
+      }
     }
+  } catch (e) {
+    if (window.Telegram?.WebApp?.showPopup) {
+      Telegram.WebApp.showPopup({ title: "Error", message: "Gagal konek server.", buttons: [{id:"ok", type:"default", text:"OK"}] });
+    }
+    console.error(e);
   }
+}
+
 
   function initTasks() {
     document.querySelectorAll(".task-card .btn-cta[data-action='watch']").forEach(btn => {
