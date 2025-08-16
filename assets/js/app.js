@@ -59,7 +59,11 @@
 
   function toast(msg){ if(tg?.showPopup){ tg.showPopup({ title:"Info", message:msg, buttons:[{id:"ok", type:"default", text:"OK"}] }); } else { console.log("[Toast]", msg); } }
 
-  function showModal({ title, message, onOk, onCancel }){ els.modalTitle.textContent=title||"Konfirmasi"; els.modalMsg.textContent=message||""; els.modalBackdrop.hidden=false; const ok=()=>{ cleanup(); onOk&&onOk(); }, cancel=()=>{ cleanup(); onCancel&&onCancel(); }; const cleanup=()=>{ els.modalBackdrop.hidden=true; els.modalOk.removeEventListener("click", ok); els.modalCancel.removeEventListener("click", cancel); }; els.modalOk.addEventListener("click", ok); els.modalCancel.addEventListener("click", cancel); }
+  function showModal({ title, message, onOk, onCancel }){ document.body.classList.add("modal-open"); els.modalTitle.textContent=title||"Konfirmasi"; els.modalMsg.textContent=message||""; els.modalBackdrop.hidden=false; const ok=()=>{ cleanup(); onOk&&onOk(); }, cancel=()=>{ cleanup(); onCancel&&onCancel(); }; const cleanup=()=>{ els.modalBackdrop.hidden = true;
+  document.body.classList.remove("modal-open");   // <-- TAMBAH BARIS INI
+  els.modalOk.removeEventListener("click", ok);
+  els.modalCancel.removeEventListener("click", cancel);
+}; els.modalOk.addEventListener("click", ok); els.modalCancel.addEventListener("click", cancel); }
 
   function showMonetagAd(){ const fn = window[window.MONETAG_FN]; try{ if(typeof fn==="function") fn(); }catch{} return new Promise(resolve=>showModal({ title:"Iklan", message:"Tonton iklan sampai selesai lalu tekan Selesai. Sistem akan verifikasi reward dari server.", onOk:()=>resolve(true), onCancel:()=>resolve(false) })); }
 
