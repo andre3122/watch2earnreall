@@ -19,9 +19,10 @@
     streak: 0,
     lastCheckin: null,
     address: localStorage.getItem("bsc_address") || "",
-    tasks: { ad1: { completed: false, reward: 0.02 }, ad2: { completed: false, reward: 0.02 } }
-  };
-
+    tasks: {
+    ad1: { completed: false, reward: 0.01 },
+    ad2: { completed: false, reward: 0.01 }
+  }
   // ===== Check-in config (9 days + +0.02) =====
   const CHECKIN_DAYS = 9;
   const CHECKIN_REWARDS = Array.from({ length: CHECKIN_DAYS }, (_, i) => Number(((i + 1) * 0.02).toFixed(2)));
