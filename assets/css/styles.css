@@ -247,3 +247,15 @@ body.modal-open .tabbar{ pointer-events:none; opacity:.85; }
   font-size: 14px;
   opacity: .95;
 }
+/* Hapus teks "Bagikan" di tombol Share (Referral) tanpa merusak tombolnya */
+#screen-referral #btnShareRef {
+  font-size: 0 !important;         /* sembunyikan teks */
+  position: relative;
+}
+
+/* Opsional: tampilkan ikon biar nggak kosong */
+#screen-referral #btnShareRef::before {
+  content: "📤";                    /* boleh ganti: "🔗" atau "↗️" */
+  font-size: 16px;
+  line-height: 1;
+}
