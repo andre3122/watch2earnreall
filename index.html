@@ -1,200 +1,171 @@
-<!doctype html>
-<html lang="en" class="scroll-smooth">
+<!DOCTYPE html>
+<html lang="en">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
-  <title>Watch2EarnReall — Telegram Mini App</title>
-  <meta name="theme-color" content="#12d8fa"/>
-  <meta name="color-scheme" content="light only"/>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Daily Check-In & Referral</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #f2f2f7;
+      color: #333;
+    }
+    .section {
+      margin: 20px;
+      padding: 20px;
+      border-radius: 16px;
+      background: linear-gradient(135deg, #8e54e9, #e081c8);
+      color: white;
+    }
+    .checkin-day {
+      display: inline-block;
+      width: 60px;
+      height: 80px;
+      margin: 5px;
+      border-radius: 10px;
+      text-align: center;
+      vertical-align: top;
+      cursor: pointer;
+      position: relative;
+      background-color: rgba(255, 255, 255, 0.2);
+    }
+    .checkin-day.completed { background-color: #4a2e9a; }
+    .checkin-day.current {
+      border: 3px solid #ffe600;
+      background-color: #6633cc;
+    }
+    .checkin-day span.day {
+      display: block;
+      margin-top: 10px;
+      font-size: 14px;
+    }
+    .checkin-day span.coins {
+      display: block;
+      margin-top: 4px;
+      font-size: 18px;
+      font-weight: bold;
+    }
+    .progress-bar-container {
+      margin: 15px 0;
+      background: rgba(255, 255, 255, 0.3);
+      border-radius: 10px;
+      height: 10px;
+      width: 100%;
+      overflow: hidden;
+    }
+    .progress-bar {
+      height: 100%;
+      width: 33%;
+      background: #ffe600;
+    }
+    .btn {
+      display: block;
+      width: 100%;
+      padding: 15px;
+      text-align: center;
+      border-radius: 10px;
+      font-size: 16px;
+      font-weight: bold;
+      margin-top: 10px;
+      background: #ffe600;
+      color: #333;
+      text-decoration: none;
+    }
 
-  <!-- Telegram Mini App SDK -->
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
-
-  <!-- Monetag Mini App SDK (SET) -->
-  <script src="//libtl.com/sdk.js" data-zone="9726748" data-sdk="show_9726748"></script>
-
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://unpkg.com/@fontsource/poppins@5.0.8/400.css" rel="stylesheet">
-  <link href="https://unpkg.com/@fontsource/poppins@5.0.8/600.css" rel="stylesheet">
-  <link rel="stylesheet" href="./assets/css/styles.css"/>
+    .referral {
+      background: #fff;
+      color: #333;
+      margin-top: 30px;
+      padding: 20px;
+      border-radius: 16px;
+    }
+    .referral h2 {
+      margin-top: 0;
+    }
+    .referral .ref-link {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      margin: 10px 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .share-buttons button {
+      margin-right: 10px;
+      padding: 8px 15px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    .btn-telegram { background: #0088cc; color: white; }
+    .btn-whatsapp { background: #25d366; color: white; }
+    .btn-twitter { background: #1da1f2; color: white; }
+  </style>
 </head>
 <body>
-  <div id="app" class="app">
-    <header class="app-header">
-      <div class="brand">
-        <div class="logo-glow"></div>
-        <span class="brand-title">Watch2Earn<span class="accent">Reall</span></span>
-      </div>
-      <div class="coins">
-        <span id="balance">$0.00</span>
-      </div>
-    </header>
 
-    <main class="screens">
-      <section id="screen-home" class="screen active">
-  <div class="checkin-card">
-    <h2 class="checkin-title">Daily Check-in Bonus</h2>
-    <p class="muted">Claim your daily reward and keep your streak!</p>
-
-    <!-- Kotak-kotak check-in -->
-    <div class="checkin-tiles" id="checkinTiles"><!-- diisi via JS --></div>
-
-    <!-- Progress bar -->
-    <div class="checkin-progress">
-      <div class="checkin-progress-bar" id="checkinProgressBar"></div>
+  <div class="section">
+    <h2>Daily Check‑in Bonus</h2>
+    <div id="checkin-container">
+      <!-- Days will be dynamically generated -->
     </div>
-
-    <!-- Tombol CLAIM -->
-    <button class="btn btn-claim" id="btnClaim">
-      <span class="gift" aria-hidden="true">🎁</span>
-      <span id="claimText">Claim Bonus</span>
-    </button>
+    <div class="progress-bar-container">
+      <div id="progress-bar" class="progress-bar"></div>
+    </div>
+    <a href="#" class="btn" id="claim-btn">Claim 4 NOTCOIN</a>
   </div>
 
-  <!-- Kartu Referral di Home -->
-  <div class="home-ref-card">
-    <h3>Invite Friends & Earn</h3>
-    <p class="muted">Get 25% of their earnings</p>
-    <button id="btnHomeRefer" class="btn btn-ref-home">Start Referring</button>
-  </div>
-</section>
-
-
-      <section id="screen-task" class="screen">
-        <div class="section-title">
-          <h2>Task Nonton Iklan</h2>
-          <p class="muted">Selesaikan task untuk mendapatkan reward. Verifikasi dilakukan dari server.</p>
-        </div>
-
-        <div class="tasks-list">
-          <article class="task-card neon-border" data-task-id="ad1">
-            <div class="task-left">
-              <div class="task-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"></path></svg></div>
-              <div class="task-meta">
-                <h3>Nonton Iklan #1</h3>
-                <p class="muted">Durasi ~15-30 detik • Reward setelah valid</p>
-              </div>
-            </div>
-            <div class="task-right"><button class="btn btn-cta" data-action="watch">Watch Ad</button></div>
-          </article>
-
-          <article class="task-card neon-border" data-task-id="ad2">
-            <div class="task-left">
-              <div class="task-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2l1.5 6L21 9l-6 1.5L13 17l-1.5-6L5 9l6-1.5L13 2z"></path></svg></div>
-              <div class="task-meta">
-                <h3>Nonton Iklan #2</h3>
-                <p class="muted">Durasi ~15-30 detik • Reward setelah valid</p>
-              </div>
-            </div>
-            <div class="task-right"><button class="btn btn-cta" data-action="watch">Watch Ad</button></div>
-          </article>
-        </div>
-
-        <div class="legend">
-          <small>Catatan: Setelah iklan selesai, sistem akan verifikasi ke server sebelum menambah saldo.</small>
-        </div>
-      </section>
-<section id="screen-referral" class="screen">
-  <!-- HERO CARD -->
-  <div class="ref-hero glass card">
-    <div class="ref-hero-head">
-      <h2>Refer & Earn Forever</h2>
-      <div class="ref-badge">25%</div>
+  <div class="referral">
+    <h2>Invite Friends & Earn</h2>
+    <p>Get 25% of their earnings</p>
+    <div class="ref-link">
+      <span id="referral-link">https://t.me/YourReferralLink</span>
+      <button id="copy-btn">Copy</button>
     </div>
-    <p class="muted">Earn <strong>25%</strong> of your friends earnings for life! Follow these simple steps to start:</p>
-
-    <ul class="ref-steps">
-      <li>
-        <div class="ref-ico">🔗</div>
-        <div><strong>1. Copy Your Link</strong><br><small>Grab your unique referral link below.</small></div>
-      </li>
-      <li>
-        <div class="ref-ico">📣</div>
-        <div><strong>2. Share with Friends</strong><br><small>Use the Telegram, WhatsApp, or Twitter/X buttons to share.</small></div>
-      </li>
-      <li>
-        <div class="ref-ico">💰</div>
-        <div><strong>3. Earn Lifetime Rewards</strong><br><small>Get 25% of your friends earnings forever once they join!</small></div>
-      </li>
-    </ul>
-
-    <h3 class="ref-subtitle">Your Referral Link</h3>
-    <div class="ref-input-group">
-      <input id="refLink" readonly value="Generating…"/>
-      <button id="btnCopyRef" class="btn copy-pill">Copy</button>
-    </div>
-
-    <div class="ref-share-buttons">
-      <button id="btnShareTG" class="btn brand tg">Telegram</button>
-      <button id="btnShareWA" class="btn brand wa">WhatsApp</button>
-      <button id="btnShareTW" class="btn brand tw">Twitter/X</button>
+    <div class="share-buttons">
+      <button class="btn-telegram">Telegram</button>
+      <button class="btn-whatsapp">WhatsApp</button>
+      <button class="btn-twitter">Twitter/X</button>
     </div>
   </div>
 
-  <!-- LIST CARD -->
-  <div class="glass card ref-list-card">
-    <div class="ref-list-head">
-      <h3>Referrals</h3>
-      <div class="ref-count-badge"><span id="refCount">0</span></div>
-    </div>
-    <div class="ref-search-row">
-      <input id="refSearch" placeholder="Search referrals by username…"/>
-    </div>
-    <div id="refList" class="ref-empty">Your referrals will appear here.</div>
-  </div>
-</section>
-      
-      
-      <section id="screen-profile" class="screen">
-        <div class="profile-top">
-          <div class="profile-avatar" id="profileAvatar" title="Telegram Profile"></div>
-          <div class="profile-id">
-            <div id="profileName" class="profile-name">User</div>
-            <div id="profileUsername" class="profile-username">@username</div>
-          </div>
-        </div>
+  <script>
+    const days = [
+      { day: 1, coins: 2, status: 'completed' },
+      { day: 2, coins: 4, status: 'current' },
+      { day: 3, coins: 6, status: 'locked' },
+      { day: 4, coins: 8, status: 'locked' },
+      { day: 5, coins: 10, status: 'locked' },
+      { day: 6, coins: 12, status: 'locked' }
+    ];
 
-        <div class="glass card">
-          <form id="withdrawForm" class="form">
-            <label for="withdrawAmount">Amount Withdraw (USD)</label>
-            <input id="withdrawAmount" name="amount" type="number" inputmode="decimal" min="1" step="0.01" placeholder="1.00" required />
-            <small class="muted">Minimum withdraw 1$</small>
-            <button class="btn btn-primary" type="submit">Submit Withdraw</button>
-          </form>
-        </div>
+    const container = document.getElementById('checkin-container');
+    days.forEach(d => {
+      const div = document.createElement('div');
+      div.classList.add('checkin-day');
+      if (d.status === 'completed') div.classList.add('completed');
+      if (d.status === 'current') div.classList.add('current');
+      div.innerHTML = `<span class="day">Day ${d.day}</span><span class="coins">${d.coins}</span>`;
+      container.appendChild(div);
+    });
 
-        <div class="glass card">
-          <form id="addressForm" class="form">
-            <label for="bscAddress">Address (BSC BEP20)</label>
-            <input id="bscAddress" name="address" type="text" placeholder="0x..." pattern="^0x[a-fA-F0-9]40$" required />
-            <small class="muted">Masukkan alamat dompet BEP20 kamu.</small>
-            <button class="btn" type="submit">Simpan Alamat</button>
-          </form>
-        </div>
-      </section>
-    </main>
+    // Progress fill: completed days / total days
+    const completedCount = days.filter(d => d.status !== 'locked').length;
+    const progress = (completedCount / days.length) * 100;
+    document.getElementById('progress-bar').style.width = progress + '%';
 
-    <nav class="tabbar">
-      <button class="tab active" data-target="home" aria-label="Home">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l9 8h-3v9h-5v-6H11v6H6v-9H3z"/></svg>
-        <span>Home</span>
-      </button>
-      <button class="tab" data-target="task" aria-label="Task">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 11h8v2H9v-2zm0 4h8v2H9v-2zM7 7h10v2H7V7z"/></svg>
-        <span>Task</span>
-      </button>
-      <button class="tab" data-target="referral" aria-label="Referral">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5s-3 1.34-3 3 1.34 3 3 3zm-8 0C9.66 11 11 9.66 11 8S9.66 5 8 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.67 0-8 1.34-8 4v2h10v-2c0-2.66-5.33-4-8-4zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45v2H24v-2c0-2.66-5.33-4-8-4z"/></svg>
-        <span>Referral</span>
-      </button>
-      <button class="tab" data-target="profile" aria-label="Profile">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12c2.7 0 5-2.3 5-5s-2.3-5-5-5-5 2.3-5 5 2.3 5 5 5zm0 2c-3.3 0-10 1.7-10 5v3h20v-3c0-3.3-6.7-5-10-5z"/></svg>
-        <span>Profil</span>
-      </button>
-    </nav>
+    // Copy referral link
+    document.getElementById('copy-btn').addEventListener('click', () => {
+      const linkEl = document.getElementById('referral-link');
+      navigator.clipboard.writeText(linkEl.textContent)
+        .then(() => alert('Referral link copied!'))
+        .catch(() => alert('Failed to copy.'));
+    });
+  </script>
 
-    
-  <script src="./assets/js/config.js"></script>
-  <script src="./assets/js/app.js" defer></script>
 </body>
 </html>
