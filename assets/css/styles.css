@@ -254,8 +254,8 @@ body.modal-open .tabbar{ pointer-events:none; opacity:.85; }
 }
 /* Opsional: tampilkan ikon biar nggak kosong */
 #screen-referral #btnShareRef::before {
-  content: "📤";                    /* boleh ganti: "🔗" atau "↗️" */
-  font-size: 16px;
+  content: "🔗";                    /* boleh ganti: "🔗" atau "↗️" */
+  font-size: 10px;
   line-height: 1;
 }
 /* Referral: rapikan baris link */
@@ -288,7 +288,7 @@ body.modal-open .tabbar{ pointer-events:none; opacity:.85; }
 
 /* Ikon share (boleh ganti 🔗/↗️/📤 sesuai selera) */
 #screen-referral #btnShareRef::before {
-  content: "📤";
+  content: "🔗";
   font-size: 20px;
   line-height: 1;
 }
