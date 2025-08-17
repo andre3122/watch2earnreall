@@ -94,31 +94,30 @@
           <small>Catatan: Setelah iklan selesai, sistem akan verifikasi ke server sebelum menambah saldo.</small>
         </div>
       </section>
+<section id="screen-referral" class="screen">
+  <div class="section-title">
+    <h2>Refer & Earn</h2>
+    <p class="muted">Share your referral link to grow faster.</p>
+  </div>
 
-      <section id="screen-referral" class="screen">
-        <div class="section-title">
-          <h2>Referral</h2>
-          <p class="muted">Undang teman untuk mendapatkan bonus dari setiap pengguna yang join dari link kamu.</p>
-        </div>
+  <!-- Kartu link + Copy (tanpa tombol Bagikan) -->
+  <div class="glass card ref-card">
+    <div class="ref-row">
+      <input id="refLink" readonly value="Generating…"/>
+      <button id="btnCopyRef" class="btn copy-pill">Copy</button>
+    </div>
+  </div>
 
-        <div class="glass card">
-          
-          <div class="ref-link-row">
-            <input id="refLink" readonly value="Generating…" />
-            <button id="btnCopyRef" class="btn">Copy</button>
-            <button id="btnShareRef" class="btn btn-primary">Bagikan</button>
-          </div>
-        </div>
-
-        <div class="glass card">
-          <div class="ref-stats">
-            <div><div class="stat-label">Teman Diundang</div><div class="stat-value" id="refCount">0</div></div>
-            <div><div class="stat-label">Bonus Referral</div><div class="stat-value" id="refBonus">$0.00</div></div>
-          </div>
-          <div class="ref-list" id="refList"></div>
-        </div>
-      </section>
-
+  <!-- Kartu statistik & list -->
+  <div class="glass card ref-stats-card">
+    <div class="ref-stats-head">
+      <h3>Referrals</h3>
+      <div class="ref-count-badge"><span id="refCount">0</span></div>
+    </div>
+    <div id="refList" class="ref-empty">Your referrals will appear here.</div>
+  </div>
+</section>
+      
       <section id="screen-profile" class="screen">
         <div class="profile-top">
           <div class="profile-avatar" id="profileAvatar" title="Telegram Profile"></div>
