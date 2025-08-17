@@ -1,11 +1,16 @@
-export default async function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "POST,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-  if (req.method === "OPTIONS") return res.status(200).end();
-  if (req.method !== "POST") return res.status(405).json({ ok:false, error:"method_not_allowed" });
-  const { user_id, address } = req.body || {};
-  if (!user_id || !address) return res.status(400).json({ ok:false, error:"missing_params" });
-  if (!/^0x[a-fA-F0-9]{40}$/.test(address)) return res.status(400).json({ ok:false, error:"invalid_bep20" });
-  return res.status(200).json({ ok:true });
-}
+const { sql } = require("../_lib/db");
+const { authFromHeader } = require("../_lib/auth");
+
+module.exports = async (req, res) => {
+  if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
+  const a = await authFromHeader(req);
+  if (!a.ok) return res.status(a.status).json({ error: a.error });
+
+  let body = {};
+  try { body = JSON.parse(req.body || "{}"); } catch {}
+  const address = (body.address || "").trim();
+  if (!/^0x[a-fA-F0-9]{40}$/.test(address)) return res.status(400).json({ error: "INVALID_ADDRESS" });
+
+  await sql`UPDATE users SET address=${address}, updated_at=now() WHERE id=${a.user.id}`;
+  res.json({ ok: true });
+};
