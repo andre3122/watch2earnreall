@@ -258,3 +258,42 @@ body.modal-open .tabbar{ pointer-events:none; opacity:.85; }
   font-size: 16px;
   line-height: 1;
 }
+/* Referral: rapikan baris link */
+#screen-referral .ref-link-row {
+  gap: 10px;
+  align-items: center;
+}
+
+/* Input & tombol punya tinggi sama */
+#screen-referral .ref-link-row input {
+  height: 44px;
+  flex: 1 1 auto;
+}
+#screen-referral .ref-link-row .btn {
+  height: 44px;
+  flex: 0 0 auto;
+}
+
+/* Tombol Share jadi ikon 44x44, tanpa teks, tetap gradient */
+#screen-referral #btnShareRef {
+  font-size: 0 !important;      /* sembunyikan teks "Bagikan" */
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+}
+
+/* Ikon share (boleh ganti 🔗/↗️/📤 sesuai selera) */
+#screen-referral #btnShareRef::before {
+  content: "📤";
+  font-size: 20px;
+  line-height: 1;
+}
+
+/* (opsional) Tombol Copy biar tinggi sama dan tidak melebar */
+#screen-referral #btnCopyRef {
+  padding: 0 14px;
+}
