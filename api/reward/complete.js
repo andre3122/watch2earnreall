@@ -1,25 +1,25 @@
-const { sql, addBalance } = require("../_lib/db");
+// api/reward/complete.js
+const { sql } = require("../_lib/db");
 const { authFromHeader } = require("../_lib/auth");
 
-const TASK_REWARDS = { ad1: 0.02, ad2: 0.02 };
-
 module.exports = async (req, res) => {
-  if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
-  const a = await authFromHeader(req);
-  if (!a.ok) return res.status(a.status).json({ error: a.error });
+  if (req.method !== "POST") return res.status(405).json({ ok:false, error:"METHOD_NOT_ALLOWED" });
 
-  let body = {};
-  try { body = JSON.parse(req.body || "{}"); } catch {}
-  const taskId = String(body.task_id || "");
-  if (!TASK_REWARDS[taskId]) return res.status(400).json({ error: "UNKNOWN_TASK" });
+  const { ok, status, user } = await authFromHeader(req);
+  if (!ok || !user) return res.status(status || 401).json({ ok:false, error:"AUTH_FAILED" });
 
-  // one-time task per user
-  const { rows: done } = await sql`SELECT 1 FROM task_completions WHERE user_id=${a.user.id} AND task_id=${taskId}`;
-  if (done.length) return res.status(400).json({ error: "ALREADY_COMPLETED" });
+  const { task_id, token } = req.body || {};
+  if (!task_id || !token) return res.status(400).json({ ok:false, error:"BAD_REQUEST" });
 
-  const amount = TASK_REWARDS[taskId];
-  await sql`INSERT INTO task_completions (user_id, task_id, amount) VALUES (${a.user.id}, ${taskId}, ${amount})`;
-  const balance = await addBalance(a.user.id, amount);
+  const { rows } = await sql`
+    UPDATE ad_sessions
+    SET status='await_postback'
+    WHERE token=${token} AND user_id=${user.id}
+      AND task_id=${task_id}
+      AND status IN ('pending','await_postback')
+    RETURNING token
+  `;
+  if (!rows.length) return res.status(200).json({ ok:true, awaiting:false, reason:"NO_SESSION" });
 
-  res.json({ credited: true, amount, balance: Number(balance) });
+  res.status(200).json({ ok:true, awaiting:true, message:"Verifying with ad network..." });
 };
