@@ -247,4 +247,27 @@ body.modal-open .tabbar{ pointer-events:none; opacity:.85; }
   font-size: 14px;
   opacity: .95;
 }
+/* ===== Referral page (sesuai contoh) ===== */
+.ref-hero{ padding:16px; border-radius:18px; }
+.ref-hero-head{ display:flex; align-items:center; justify-content:space-between; }
+.ref-badge{ background:#eef2f7; border:1px solid var(--line); width:44px; height:28px; border-radius:999px; display:grid; place-items:center; font-weight:800; }
+.ref-steps{ list-style:none; margin:10px 0 12px; padding:0; display:grid; gap:10px; }
+.ref-steps li{ display:flex; gap:10px; align-items:flex-start; background:#fff; border:1px solid var(--line); border-radius:14px; padding:10px; }
+.ref-ico{ width:36px; height:36px; border-radius:12px; display:grid; place-items:center; background:linear-gradient(135deg,#dfe7ff,#eaf3ff); font-size:18px; }
+.ref-subtitle{ margin:10px 0 8px; }
+.ref-input-group{ display:flex; gap:10px; }
+.ref-input-group input{ flex:1 1 auto; height:44px; border:1px solid var(--line); border-radius:16px; padding:0 12px; background:#fff; font-weight:700; }
+.copy-pill{ height:44px; padding:0 16px; border-radius:16px; font-weight:900; }
+
+.ref-share-buttons{ margin-top:10px; display:flex; gap:10px; }
+.ref-share-buttons .brand{ color:#fff; border:none; height:40px; padding:0 14px; border-radius:12px; font-weight:800; }
+.ref-share-buttons .tg{ background:linear-gradient(90deg,#7a5cff,#4da3ff); }
+.ref-share-buttons .wa{ background:linear-gradient(90deg,#27ae60,#2ecc71); }
+.ref-share-buttons .tw{ background:linear-gradient(90deg,#1da1f2,#3bb3ff); color:#083a63; }
+
+.ref-list-card{ margin-top:14px; padding:14px; }
+.ref-list-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+.ref-count-badge{ width:44px; height:44px; border-radius:999px; display:grid; place-items:center; background:#eef2f7; border:1px solid var(--line); color:#0b1220; font-weight:800; }
+.ref-search-row input{ width:100%; height:42px; border:1px solid var(--line); border-radius:12px; padding:0 12px; background:#fff; margin-bottom:8px; }
+.ref-empty{ color:var(--muted); }
 
