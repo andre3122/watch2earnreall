@@ -1,8 +1,8 @@
-/* Watch2EarnReall — app.js (FULL, 9 hari)
-   - Daily Check-in: 9 hari, kotak besar (lebih kecil), progress bar, tombol CLAIM
-   - Reward harian: day1=0.02 ... day9=0.18 (+0.02 per hari)
-   - Task Monetag: langsung verifikasi ke /api/reward/complete (tanpa modal)
-   - Referral: inject UI ala "Refer & Earn Forever" (3 langkah, Copy, share TG/WA/Twitter, list + search)
+/* Watch2EarnReall — app.js (FULL, 9 hari + top toast)
+   - Daily Check-in: 9 hari (0.02 → 0.18), progress, tombol CLAIM
+   - Task Monetag: verifikasi ke /api/reward/complete (tanpa modal)
+   - Referral: UI ala "Refer & Earn Forever" (3 langkah, Copy, share TG/WA/Twitter, list + search)
+   - Top Toast: notifikasi bar kecil di atas (dipakai untuk Copy, sukses, error, dll)
    - Fallback user untuk test di browser
 */
 (() => {
@@ -15,8 +15,8 @@
   const state = {
     user: tg?.initDataUnsafe?.user || null,
     balance: 0.00,
-    streak: 0,            // jumlah hari yang sudah diclaim
-    lastCheckin: null,    // YYYY-MM-DD terakhir claim
+    streak: 0,
+    lastCheckin: null,
     address: localStorage.getItem("bsc_address") || "",
     refCount: 0,
     refBonus: 0,
@@ -34,7 +34,6 @@
 
   // ===== ELEM =====
   const els = {
-    // screens & nav
     screens: {
       home:      document.getElementById("screen-home"),
       task:      document.getElementById("screen-task"),
@@ -43,24 +42,18 @@
     },
     tabs: document.querySelectorAll(".tabbar .tab"),
 
-    // header
     balance: document.getElementById("balance"),
 
-    // HOME (check-in gaya baru)
+    // HOME
     checkinTiles:       document.getElementById("checkinTiles"),
     checkinProgressBar: document.getElementById("checkinProgressBar"),
     btnClaim:           document.getElementById("btnClaim"),
     btnHomeRefer:       document.getElementById("btnHomeRefer"),
 
-    // REFERRAL (akan di-bind ulang setelah UI di-inject)
-    refLink:     null,
-    btnCopyRef:  null,
-    btnShareTG:  null,
-    btnShareWA:  null,
-    btnShareTW:  null,
-    refCount:    null,
-    refList:     null,
-    refSearch:   null,
+    // REFERRAL (rebind setelah inject UI)
+    refLink: null, btnCopyRef: null,
+    btnShareTG: null, btnShareWA: null, btnShareTW: null,
+    refCount: null, refList: null, refSearch: null,
 
     // PROFILE / WITHDRAW / ADDRESS
     profileAvatar:   document.getElementById("profileAvatar"),
@@ -93,10 +86,53 @@
     return data || {};
   }
 
-  function toast(msg, title="Info") {
-    if (tg?.showPopup) tg.showPopup({ title, message: msg, buttons: [{ id:"ok", type:"default", text:"OK"}] });
-    else console.log(`[${title}]`, msg);
+  // ===== Top Toast =====
+  let toastTimer = null;
+  function injectToastStyles() {
+    if (document.getElementById("topToastStyles")) return;
+    const style = document.createElement("style");
+    style.id = "topToastStyles";
+    style.textContent = `
+      #topToast{
+        position: fixed; top: 10px; left: 50%;
+        transform: translate(-50%, -140%);
+        transition: transform .35s ease, opacity .35s ease;
+        background: linear-gradient(90deg,#1f1b2e,#37345a);
+        color:#fff; font-weight:800; font-size:13px;
+        padding:10px 14px; border-radius:999px;
+        box-shadow:0 10px 28px rgba(0,0,0,.3);
+        z-index: 99999; pointer-events:none; opacity:0;
+        display:flex; align-items:center; gap:8px;
+      }
+      #topToast.show{ transform: translate(-50%, 0); opacity:1; }
+      #topToast.success{ background: linear-gradient(90deg,#00c853,#00e676); color:#062d1a; }
+      #topToast.error{ background: linear-gradient(90deg,#ff3d57,#ff6f6f); }
+      #topToast .ticon{ font-size:16px; line-height:1; }
+    `;
+    document.head.appendChild(style);
   }
+  function ensureToastEl() {
+    injectToastStyles();
+    let el = document.getElementById("topToast");
+    if (!el) {
+      el = document.createElement("div");
+      el.id = "topToast";
+      el.innerHTML = `<span class="ticon">✔</span><span class="tmsg"></span>`;
+      document.body.appendChild(el);
+    }
+    return el;
+  }
+  function toast(message, type="success") {
+    const el = ensureToastEl();
+    el.classList.remove("success","error");
+    el.classList.add(type);
+    el.querySelector(".ticon").textContent = type === "error" ? "⚠️" : "✔";
+    el.querySelector(".tmsg").textContent = message;
+    el.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove("show"), 1600);
+  }
+  // NOTE: kita tidak pakai tg.showPopup sama sekali agar tampil modern
 
   // ===== PERSIST / DATE =====
   function loadPersisted() {
@@ -139,19 +175,17 @@
       else if (d === next && canClaimToday()) cls += " current";
       else if (d > next) cls += " locked";
 
-      const reward = CHECKIN_REWARDS[d - 1].toFixed(2); // tampilkan 0.02 ... 0.18
+      const reward = CHECKIN_REWARDS[d - 1].toFixed(2);
       return `<div class="${cls}" data-day="${d}">
                 Day ${d}<small>${reward}</small>
               </div>`;
     }).join("");
 
-    // progress bar
     if (els.checkinProgressBar) {
       const pct = (state.streak / CHECKIN_DAYS) * 100;
       els.checkinProgressBar.style.width = `${pct}%`;
     }
 
-    // tombol claim
     if (els.btnClaim) {
       els.btnClaim.disabled = !canClaimToday();
       const span = els.btnClaim.querySelector("#claimText");
@@ -161,8 +195,6 @@
 
   async function claimToday() {
     if (!canClaimToday()) return;
-
-    // reward hari yang akan di-claim (index 0-based)
     const idx = Math.min(state.streak, CHECKIN_DAYS - 1);
     const reward = CHECKIN_REWARDS[idx];
 
@@ -170,11 +202,9 @@
     state.streak = Math.min(CHECKIN_DAYS, (state.streak || 0) + 1);
     saveCheckin();
     renderCheckinTiles();
-
-    // tambahkan reward ke saldo (ubah +0 jika tak ingin menambah saldo)
     setBalance(state.balance + reward);
 
-    toast(`Check-in berhasil! +$${reward.toFixed(2)}`, "Claimed");
+    toast(`Check-in berhasil! +$${reward.toFixed(2)}`, "success");
   }
 
   // ===== TASKS (tanpa modal) =====
@@ -185,13 +215,11 @@
         if (!taskId) return;
         if (state.tasks[taskId]?.completed) return;
 
-        // Tampilkan iklan Monetag (jika ada)
         try {
           const fn = window[window.MONETAG_FN];
           if (typeof fn === "function") fn();
         } catch {}
 
-        // Verifikasi ke server
         try {
           const data = await safeFetch(`/api/reward/complete`, {
             method: "POST",
@@ -203,13 +231,13 @@
             state.tasks[taskId].completed = true;
             setBalance(state.balance + (state.tasks[taskId].reward || 0));
             btn.disabled = true;
-            toast("Reward ditambahkan!", "Berhasil");
+            toast("Reward ditambahkan!", "success");
           } else {
-            toast("Verifikasi gagal.", "Gagal");
+            toast("Verifikasi gagal.", "error");
           }
         } catch (e) {
           console.error(e);
-          toast("Gagal konek server.", "Error");
+          toast("Gagal konek server.", "error");
         }
       });
     });
@@ -218,7 +246,9 @@
   // ====== REFERRAL: Inject UI & Styles ======
   function injectReferralStyles() {
     if (document.getElementById("referralStyles")) return;
-    const css = `
+    const style = document.createElement("style");
+    style.id = "referralStyles";
+    style.textContent = `
       .ref-hero{ padding:16px; border-radius:18px; }
       .ref-hero-head{ display:flex; align-items:center; justify-content:space-between; }
       .ref-badge{ background:#eef2f7; border:1px solid var(--line); width:44px; height:28px; border-radius:999px; display:grid; place-items:center; font-weight:800; }
@@ -239,13 +269,9 @@
       .ref-count-badge{ width:44px; height:44px; border-radius:999px; display:grid; place-items:center; background:#eef2f7; border:1px solid var(--line); color:#0b1220; font-weight:800; }
       .ref-search-row input{ width:100%; height:42px; border:1px solid var(--line); border-radius:12px; padding:0 12px; background:#fff; margin-bottom:8px; }
       .ref-empty{ color:var(--muted); }
-      /* list item default */
       #refList .ref-item{ display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px dashed rgba(0,0,0,.06); }
       #refList .ref-item .avatar{ width:36px; height:36px; border-radius:50%; background:#eef2f7; }
     `;
-    const style = document.createElement("style");
-    style.id = "referralStyles";
-    style.textContent = css;
     document.head.appendChild(style);
   }
 
@@ -319,19 +345,17 @@
     els.refLink && (els.refLink.value = link);
   }
   function copy(text) {
-    try { navigator.clipboard.writeText(text); toast("Copied!"); }
+    try { navigator.clipboard.writeText(text); toast("Link copied!", "success"); }
     catch {
       const ta = document.createElement("textarea");
       ta.value = text; document.body.appendChild(ta); ta.select();
-      document.execCommand("copy"); ta.remove(); toast("Copied!");
+      document.execCommand("copy"); ta.remove(); toast("Link copied!", "success");
     }
   }
 
   function initReferralButtons() {
-    // Copy
     els.btnCopyRef?.addEventListener("click", () => els.refLink && copy(els.refLink.value));
 
-    // Share handlers
     const share = (platform) => {
       const url  = els.refLink?.value || `https://t.me/${window.BOT_USERNAME}?start=ref_${state.user?.id||"guest"}`;
       const text = "Join Watch2EarnReall dan dapatkan reward nonton iklan!";
@@ -345,7 +369,6 @@
     els.btnShareWA?.addEventListener("click", ()=>share("wa"));
     els.btnShareTW?.addEventListener("click", ()=>share("tw"));
 
-    // Search filter
     els.refSearch?.addEventListener("input", () => {
       const q = els.refSearch.value.toLowerCase();
       document.querySelectorAll("#refList .ref-item").forEach(el => {
@@ -358,7 +381,6 @@
     try {
       const data = await safeFetch(`/api/referrals?user_id=${encodeURIComponent(state.user?.id || "guest")}`);
       els.refCount && (els.refCount.textContent = data?.count ?? 0);
-      // (opsional) tampilkan daftar
       const list = Array.isArray(data?.list) ? data.list : [];
       if (els.refList) {
         els.refList.classList.remove("ref-empty");
@@ -372,7 +394,7 @@
           : "Your referrals will appear here.";
       }
     } catch {
-      // biarin silent
+      // silent
     }
   }
 
@@ -398,17 +420,17 @@
     els.withdrawForm?.addEventListener("submit", async (e) => {
       e.preventDefault();
       const amount = Number(els.withdrawAmount.value);
-      if (isNaN(amount) || amount < 1) return toast("Minimum withdraw 1$");
-      if (!state.address) return toast("Isi alamat BEP20 dulu.");
+      if (isNaN(amount) || amount < 1) return toast("Minimum withdraw 1$", "error");
+      if (!state.address) return toast("Isi alamat BEP20 dulu.", "error");
       try {
         const data = await safeFetch(`/api/withdraw`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ user_id: String(state.user?.id), amount, address: state.address })
         });
-        if (data?.ok) { toast("Permintaan withdraw dikirim."); els.withdrawAmount.value = ""; }
-        else { toast(data?.error || "Gagal withdraw."); }
-      } catch { toast("Gagal konek server."); }
+        if (data?.ok) { toast("Permintaan withdraw dikirim.", "success"); els.withdrawAmount.value = ""; }
+        else { toast(data?.error || "Gagal withdraw.", "error"); }
+      } catch { toast("Gagal konek server.", "error"); }
     });
   }
 
@@ -416,7 +438,7 @@
     els.addressForm?.addEventListener("submit", async (e) => {
       e.preventDefault();
       const addr = (els.bscAddress.value || "").trim();
-      if (!/^0x[a-fA-F0-9]{40}$/.test(addr)) return toast("Alamat BEP20 tidak valid.");
+      if (!/^0x[a-fA-F0-9]{40}$/.test(addr)) return toast("Alamat BEP20 tidak valid.", "error");
       state.address = addr; localStorage.setItem("bsc_address", addr);
       try {
         await safeFetch(`/api/address/save`, {
@@ -424,8 +446,8 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ user_id: String(state.user?.id), address: addr })
         });
-        toast("Alamat disimpan.");
-      } catch { toast("Gagal menyimpan alamat (server)."); }
+        toast("Alamat disimpan.", "success");
+      } catch { toast("Gagal menyimpan alamat (server).", "error"); }
     });
   }
 
@@ -445,7 +467,8 @@
     setProfile();
     setBalance(state.balance);
 
-    // Inject Referral UI & CSS, lalu bind elementnya
+    // Referral
+    injectToastStyles();         // siapkan toast lebih dulu
     injectReferralStyles();
     injectReferralUI();
     bindReferralEls();
@@ -462,7 +485,7 @@
     initWithdrawForm();
     initAddressForm();
 
-    // Fetch data ringan
+    // Data
     fetchReferrals();
 
     // Theme
