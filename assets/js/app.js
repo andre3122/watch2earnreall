@@ -26,7 +26,8 @@
   // ===== Check-in config (9 days + +0.02) =====
   const CHECKIN_DAYS = 9;
   const CHECKIN_REWARDS = Array.from({ length: CHECKIN_DAYS }, (_, i) => Number(((i + 1) * 0.02).toFixed(2)));
-
+let checkinSession = { token: null, done: false };
+   
   // ===== ELEM =====
   const els = {
     screens: {
@@ -499,8 +500,8 @@ async function safeFetch(path, options = {}) {
 
     // HOME
     renderCheckinTiles();
-    els.btnClaim?.addEventListener("click", claimToday);
-
+    els.btnClaim?.addEventListener("click", onClickClaimCheckin);
+     
     // NAV/REF/TASK/FORM
     initTabs(); initReferralButtons(); initTasks(); initWithdrawForm(); initAddressForm();
 
