@@ -80,16 +80,25 @@
 
   // STRICT: send Telegram initData so server can validate auth
   async function safeFetch(path, options = {}) {
-    const tgRaw = window.Telegram?.WebApp?.initData || "";
-    const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
-    if (tgRaw) headers["x-telegram-init-data"] = tgRaw;
+  const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
+  const tgRaw = window.Telegram?.WebApp?.initData || "";
 
-    const res = await fetch(API + path, { ...options, headers });
-    let data = null;
-    try { data = await res.json(); } catch {}
-    if (!res.ok) throw new Error((data && (data.error || data.message)) || `HTTP ${res.status}`);
-    return data || {};
+  if (tgRaw) {
+    // mode Mini App (production) – kirim initData ke server
+    headers["x-telegram-init-data"] = tgRaw;
+  } else {
+    // mode DEV (browser biasa) – kirim user dummy agar server menerima
+    let uid = localStorage.getItem("demo_uid");
+    if (!uid) { uid = String(Math.floor(Math.random()*9e9)+1e9); localStorage.setItem("demo_uid", uid); }
+    headers["x-telegram-test-user"] = JSON.stringify({ id: uid, first_name: "Guest", username: "guest" });
   }
+
+  const res = await fetch(path, { ...options, headers });
+  let data = null;
+  try { data = await res.json(); } catch {}
+  if (!res.ok) throw new Error((data && (data.error || data.message)) || `HTTP ${res.status}`);
+  return data || {};
+}
 
   // ===== Top Toast (safe-area aware) =====
   let toastTimer = null;
@@ -518,7 +527,7 @@
 
     // HOME
     renderCheckinTiles();
-    els.btnClaim?.addEventListener("click", onClickClaimCheckin);
+    els.btnClaim?.addEventListener("click", claimToday);
 
     // NAV/REF/TASK/FORM
     initTabs(); initReferralButtons(); initTasks(); initWithdrawForm(); initAddressForm();
