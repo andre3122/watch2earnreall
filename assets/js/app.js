@@ -1,8 +1,8 @@
 /* Watch2EarnReall — app.js (FULL, 9 hari + top toast)
    - Daily Check-in: 9 hari (0.02 → 0.18), progress, tombol CLAIM
    - Task Monetag: verifikasi ke /api/reward/complete (tanpa modal)
-   - Referral: UI ala "Refer & Earn Forever" (3 langkah, Copy, share TG/WA/Twitter, list + search)
-   - Top Toast: notifikasi bar kecil di atas (dipakai untuk Copy, sukses, error, dll)
+   - Referral: "Refer & Earn Forever" (3 langkah, Copy, share TG/WA/Twitter, list + search)
+   - Top Toast: notifikasi bar kecil di atas (untuk Copy/Reward/Withdraw/Error)
    - Fallback user untuk test di browser
 */
 (() => {
@@ -42,6 +42,7 @@
     },
     tabs: document.querySelectorAll(".tabbar .tab"),
 
+    // header
     balance: document.getElementById("balance"),
 
     // HOME
@@ -86,23 +87,28 @@
     return data || {};
   }
 
-  // ===== Top Toast =====
+  // ===== Top Toast (safe-area aware) =====
   let toastTimer = null;
   function injectToastStyles() {
     if (document.getElementById("topToastStyles")) return;
     const style = document.createElement("style");
     style.id = "topToastStyles";
     style.textContent = `
+      :root { --safe-top: 12px; }
       #topToast{
-        position: fixed; top: 10px; left: 50%;
+        position: fixed;
+        top: var(--safe-top);
+        left: 50%;
         transform: translate(-50%, -140%);
         transition: transform .35s ease, opacity .35s ease;
         background: linear-gradient(90deg,#1f1b2e,#37345a);
         color:#fff; font-weight:800; font-size:13px;
         padding:10px 14px; border-radius:999px;
         box-shadow:0 10px 28px rgba(0,0,0,.3);
-        z-index: 99999; pointer-events:none; opacity:0;
+        z-index: 2147483647;
+        pointer-events:none; opacity:0;
         display:flex; align-items:center; gap:8px;
+        will-change: transform, opacity;
       }
       #topToast.show{ transform: translate(-50%, 0); opacity:1; }
       #topToast.success{ background: linear-gradient(90deg,#00c853,#00e676); color:#062d1a; }
@@ -111,8 +117,14 @@
     `;
     document.head.appendChild(style);
   }
+  function updateSafeTop() {
+    const inset = (window.Telegram?.WebApp?.safeAreaInset?.top || 0);
+    const topPx = Math.max(8, inset || 0) + 8; // fallback nyaman
+    document.documentElement.style.setProperty("--safe-top", `${topPx}px`);
+  }
   function ensureToastEl() {
     injectToastStyles();
+    updateSafeTop();
     let el = document.getElementById("topToast");
     if (!el) {
       el = document.createElement("div");
@@ -132,7 +144,8 @@
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => el.classList.remove("show"), 1600);
   }
-  // NOTE: kita tidak pakai tg.showPopup sama sekali agar tampil modern
+  // debug helper
+  window.__toast = toast;
 
   // ===== PERSIST / DATE =====
   function loadPersisted() {
@@ -215,6 +228,7 @@
         if (!taskId) return;
         if (state.tasks[taskId]?.completed) return;
 
+        // show ad (optional)
         try {
           const fn = window[window.MONETAG_FN];
           if (typeof fn === "function") fn();
@@ -354,8 +368,10 @@
   }
 
   function initReferralButtons() {
+    // Copy
     els.btnCopyRef?.addEventListener("click", () => els.refLink && copy(els.refLink.value));
 
+    // Share handlers
     const share = (platform) => {
       const url  = els.refLink?.value || `https://t.me/${window.BOT_USERNAME}?start=ref_${state.user?.id||"guest"}`;
       const text = "Join Watch2EarnReall dan dapatkan reward nonton iklan!";
@@ -369,6 +385,7 @@
     els.btnShareWA?.addEventListener("click", ()=>share("wa"));
     els.btnShareTW?.addEventListener("click", ()=>share("tw"));
 
+    // Search filter
     els.refSearch?.addEventListener("input", () => {
       const q = els.refSearch.value.toLowerCase();
       document.querySelectorAll("#refList .ref-item").forEach(el => {
@@ -467,8 +484,12 @@
     setProfile();
     setBalance(state.balance);
 
+    // Toast
+    injectToastStyles();
+    updateSafeTop();
+    window.Telegram?.WebApp?.onEvent?.("viewportChanged", updateSafeTop);
+
     // Referral
-    injectToastStyles();         // siapkan toast lebih dulu
     injectReferralStyles();
     injectReferralUI();
     bindReferralEls();
@@ -490,6 +511,11 @@
 
     // Theme
     document.body.dataset.tg = tg?.colorScheme || "light";
+
+    // (opsional) tombol refer di Home -> buka tab referral
+    els.btnHomeRefer?.addEventListener?.("click", () => {
+      document.querySelector('.tab[data-target="referral"]')?.click();
+    });
   }
   init();
 })();
