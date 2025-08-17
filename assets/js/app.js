@@ -1,8 +1,8 @@
 /* Watch2EarnReall — app.js (FULL, 9 hari)
-   - Daily Check-in: 9 hari, kotak besar (lebih kecil dari sebelumnya), progress bar, tombol CLAIM
+   - Daily Check-in: 9 hari, kotak besar (lebih kecil), progress bar, tombol CLAIM
    - Reward harian: day1=0.02 ... day9=0.18 (+0.02 per hari)
    - Task Monetag: langsung verifikasi ke /api/reward/complete (tanpa modal)
-   - Home Referral card ("Start Referring")
+   - Referral: inject UI ala "Refer & Earn Forever" (3 langkah, Copy, share TG/WA/Twitter, list + search)
    - Fallback user untuk test di browser
 */
 (() => {
@@ -52,13 +52,15 @@
     btnClaim:           document.getElementById("btnClaim"),
     btnHomeRefer:       document.getElementById("btnHomeRefer"),
 
-    // REFERRAL
-    refLink:     document.getElementById("refLink"),
-    btnCopyRef:  document.getElementById("btnCopyRef"),
-    btnShareRef: document.getElementById("btnShareRef"),
-    refCount:    document.getElementById("refCount"),
-    refBonus:    document.getElementById("refBonus"),
-    refList:     document.getElementById("refList"),
+    // REFERRAL (akan di-bind ulang setelah UI di-inject)
+    refLink:     null,
+    btnCopyRef:  null,
+    btnShareTG:  null,
+    btnShareWA:  null,
+    btnShareTW:  null,
+    refCount:    null,
+    refList:     null,
+    refSearch:   null,
 
     // PROFILE / WITHDRAW / ADDRESS
     profileAvatar:   document.getElementById("profileAvatar"),
@@ -213,7 +215,104 @@
     });
   }
 
-  // ===== REFERRAL =====
+  // ====== REFERRAL: Inject UI & Styles ======
+  function injectReferralStyles() {
+    if (document.getElementById("referralStyles")) return;
+    const css = `
+      .ref-hero{ padding:16px; border-radius:18px; }
+      .ref-hero-head{ display:flex; align-items:center; justify-content:space-between; }
+      .ref-badge{ background:#eef2f7; border:1px solid var(--line); width:44px; height:28px; border-radius:999px; display:grid; place-items:center; font-weight:800; }
+      .ref-steps{ list-style:none; margin:10px 0 12px; padding:0; display:grid; gap:10px; }
+      .ref-steps li{ display:flex; gap:10px; align-items:flex-start; background:#fff; border:1px solid var(--line); border-radius:14px; padding:10px; }
+      .ref-ico{ width:36px; height:36px; border-radius:12px; display:grid; place-items:center; background:linear-gradient(135deg,#dfe7ff,#eaf3ff); font-size:18px; }
+      .ref-subtitle{ margin:10px 0 8px; }
+      .ref-input-group{ display:flex; gap:10px; }
+      .ref-input-group input{ flex:1 1 auto; height:44px; border:1px solid var(--line); border-radius:16px; padding:0 12px; background:#fff; font-weight:700; }
+      .copy-pill{ height:44px; padding:0 16px; border-radius:16px; font-weight:900; }
+      .ref-share-buttons{ margin-top:10px; display:flex; gap:10px; }
+      .ref-share-buttons .brand{ color:#fff; border:none; height:40px; padding:0 14px; border-radius:12px; font-weight:800; }
+      .ref-share-buttons .tg{ background:linear-gradient(90deg,#7a5cff,#4da3ff); }
+      .ref-share-buttons .wa{ background:linear-gradient(90deg,#27ae60,#2ecc71); }
+      .ref-share-buttons .tw{ background:linear-gradient(90deg,#1da1f2,#3bb3ff); color:#083a63; }
+      .ref-list-card{ margin-top:14px; padding:14px; }
+      .ref-list-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+      .ref-count-badge{ width:44px; height:44px; border-radius:999px; display:grid; place-items:center; background:#eef2f7; border:1px solid var(--line); color:#0b1220; font-weight:800; }
+      .ref-search-row input{ width:100%; height:42px; border:1px solid var(--line); border-radius:12px; padding:0 12px; background:#fff; margin-bottom:8px; }
+      .ref-empty{ color:var(--muted); }
+      /* list item default */
+      #refList .ref-item{ display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px dashed rgba(0,0,0,.06); }
+      #refList .ref-item .avatar{ width:36px; height:36px; border-radius:50%; background:#eef2f7; }
+    `;
+    const style = document.createElement("style");
+    style.id = "referralStyles";
+    style.textContent = css;
+    document.head.appendChild(style);
+  }
+
+  function injectReferralUI() {
+    const box = els.screens.referral;
+    if (!box) return;
+    box.innerHTML = `
+      <div class="ref-hero glass card">
+        <div class="ref-hero-head">
+          <h2>Refer & Earn Forever</h2>
+          <div class="ref-badge">25%</div>
+        </div>
+        <p class="muted">Earn <strong>25%</strong> of your friends earnings for life! Follow these simple steps to start:</p>
+
+        <ul class="ref-steps">
+          <li>
+            <div class="ref-ico">🔗</div>
+            <div><strong>1. Copy Your Link</strong><br><small>Grab your unique referral link below.</small></div>
+          </li>
+          <li>
+            <div class="ref-ico">📣</div>
+            <div><strong>2. Share with Friends</strong><br><small>Use the Telegram, WhatsApp, or Twitter/X buttons to share.</small></div>
+          </li>
+          <li>
+            <div class="ref-ico">💰</div>
+            <div><strong>3. Earn Lifetime Rewards</strong><br><small>Get 25% of your friends earnings forever once they join!</small></div>
+          </li>
+        </ul>
+
+        <h3 class="ref-subtitle">Your Referral Link</h3>
+        <div class="ref-input-group">
+          <input id="refLink" readonly value="Generating…"/>
+          <button id="btnCopyRef" class="btn copy-pill">Copy</button>
+        </div>
+
+        <div class="ref-share-buttons">
+          <button id="btnShareTG" class="btn brand tg">Telegram</button>
+          <button id="btnShareWA" class="btn brand wa">WhatsApp</button>
+          <button id="btnShareTW" class="btn brand tw">Twitter/X</button>
+        </div>
+      </div>
+
+      <div class="glass card ref-list-card">
+        <div class="ref-list-head">
+          <h3>Referrals</h3>
+          <div class="ref-count-badge"><span id="refCount">0</span></div>
+        </div>
+        <div class="ref-search-row">
+          <input id="refSearch" placeholder="Search referrals by username…"/>
+        </div>
+        <div id="refList" class="ref-empty">Your referrals will appear here.</div>
+      </div>
+    `;
+  }
+
+  function bindReferralEls() {
+    els.refLink   = document.getElementById("refLink");
+    els.btnCopyRef= document.getElementById("btnCopyRef");
+    els.btnShareTG= document.getElementById("btnShareTG");
+    els.btnShareWA= document.getElementById("btnShareWA");
+    els.btnShareTW= document.getElementById("btnShareTW");
+    els.refCount  = document.getElementById("refCount");
+    els.refList   = document.getElementById("refList");
+    els.refSearch = document.getElementById("refSearch");
+  }
+
+  // ===== REFERRAL Logic =====
   function setReferralLink() {
     const id = state.user?.id || "guest";
     const link = `https://t.me/${window.BOT_USERNAME}?start=ref_${id}`;
@@ -227,33 +326,54 @@
       document.execCommand("copy"); ta.remove(); toast("Copied!");
     }
   }
-  function initReferralButtons() {
-    els.btnCopyRef?.addEventListener("click", () => els.refLink && copy(els.refLink.value));
-    els.btnShareRef?.addEventListener("click", () => {
-      const url  = els.refLink?.value || "";
-      const text = "Join Watch2EarnReall dan dapatkan reward nonton iklan!";
-      if (navigator.share) navigator.share({ title: "Watch2EarnReall", text, url }).catch(()=>{});
-      else copy(url);
-    });
 
-    // Tombol referral di Home
-    els.btnHomeRefer?.addEventListener("click", () => {
+  function initReferralButtons() {
+    // Copy
+    els.btnCopyRef?.addEventListener("click", () => els.refLink && copy(els.refLink.value));
+
+    // Share handlers
+    const share = (platform) => {
       const url  = els.refLink?.value || `https://t.me/${window.BOT_USERNAME}?start=ref_${state.user?.id||"guest"}`;
       const text = "Join Watch2EarnReall dan dapatkan reward nonton iklan!";
-      if (navigator.share) navigator.share({ title:"Watch2EarnReall", text, url }).catch(()=>{});
-      else document.querySelector('.tab[data-target="referral"]')?.click();
+      if (navigator.share) { navigator.share({ title:"Watch2EarnReall", text, url }).catch(()=>{}); return; }
+      const open = (u) => window.open(u, "_blank");
+      if (platform === "tg") open(`https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`);
+      if (platform === "wa") open(`https://wa.me/?text=${encodeURIComponent(text + " " + url)}`);
+      if (platform === "tw") open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`);
+    };
+    els.btnShareTG?.addEventListener("click", ()=>share("tg"));
+    els.btnShareWA?.addEventListener("click", ()=>share("wa"));
+    els.btnShareTW?.addEventListener("click", ()=>share("tw"));
+
+    // Search filter
+    els.refSearch?.addEventListener("input", () => {
+      const q = els.refSearch.value.toLowerCase();
+      document.querySelectorAll("#refList .ref-item").forEach(el => {
+        el.style.display = el.textContent.toLowerCase().includes(q) ? "" : "none";
+      });
     });
   }
+
   async function fetchReferrals() {
     try {
       const data = await safeFetch(`/api/referrals?user_id=${encodeURIComponent(state.user?.id || "guest")}`);
       els.refCount && (els.refCount.textContent = data?.count ?? 0);
-      els.refBonus && (els.refBonus.textContent = `$${(Number(data?.bonus || 0)).toFixed(2)}`);
+      // (opsional) tampilkan daftar
       const list = Array.isArray(data?.list) ? data.list : [];
-      els.refList && (els.refList.innerHTML = list.map(r => (
-        `<div class="ref-item"><div class="avatar"></div><div>${r?.name || "User"}<br><small>${r?.joined || ""}</small></div></div>`
-      )).join(""));
-    } catch {}
+      if (els.refList) {
+        els.refList.classList.remove("ref-empty");
+        els.refList.innerHTML = list.length
+          ? list.map(r => (
+              `<div class="ref-item">
+                 <div class="avatar"></div>
+                 <div>${r?.name || "User"}<br><small>${r?.joined || ""}</small></div>
+               </div>`
+            )).join("")
+          : "Your referrals will appear here.";
+      }
+    } catch {
+      // biarin silent
+    }
   }
 
   // ===== PROFILE / WITHDRAW / ADDRESS =====
@@ -323,8 +443,13 @@
     ensureUser();
     loadPersisted();
     setProfile();
-    setReferralLink();
     setBalance(state.balance);
+
+    // Inject Referral UI & CSS, lalu bind elementnya
+    injectReferralStyles();
+    injectReferralUI();
+    bindReferralEls();
+    setReferralLink();
 
     // HOME
     renderCheckinTiles();
