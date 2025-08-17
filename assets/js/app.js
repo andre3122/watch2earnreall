@@ -71,20 +71,20 @@
     }
   }
 
-  async function safeFetch(path, options = {}) {
-    const res = await fetch(API + path, {
-      ...options,
-      headers: {
-        "Content-Type": "application/json",
-        "X-Telegram-Init-Data": INIT, // auth header
-        ...(options.headers || {})
-      }
-    });
-    let data = null;
-    try { data = await res.json(); } catch {}
-    if (!res.ok) throw new Error((data && (data.error || data.message)) || `HTTP ${res.status}`);
-    return data || {};
-  }
+  // STRICT: hanya menerima request dari Telegram Mini App
+async function safeFetch(path, options = {}) {
+  const tgRaw = window.Telegram?.WebApp?.initData || "";
+  const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
+
+  // kirim header Telegram (WAJIB saat di Mini App)
+  if (tgRaw) headers["x-telegram-init-data"] = tgRaw;
+
+  const res = await fetch(API + path, { ...options, headers });
+  let data = null;
+  try { data = await res.json(); } catch {}
+  if (!res.ok) throw new Error((data && (data.error || data.message)) || `HTTP ${res.status}`);
+  return data || {};
+}
 
   // ===== Top Toast (safe-area aware) =====
   let toastTimer = null;
