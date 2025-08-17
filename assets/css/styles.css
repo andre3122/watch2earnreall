@@ -234,3 +234,16 @@ body.modal-open .tabbar{ pointer-events:none; opacity:.85; }
   background: #fff; color:#6a32c9; font-weight:900;
   border-radius:16px; padding:12px 14px; border:none;
 }
+/* --- resize tiles & typografi --- */
+.checkin-tiles{ grid-template-columns: repeat(3, 1fr); gap: 12px; }
+
+.day-tile{
+  height: 82px;              /* sebelumnya 92px */
+  border-radius: 16px;       /* sedikit lebih kecil */
+  font-size: 18px;           /* sebelumnya 20px */
+}
+.day-tile small{
+  bottom: 8px;
+  font-size: 14px;
+  opacity: .95;
+}
