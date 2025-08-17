@@ -1,16 +1,16 @@
-/* Watch2EarnReall — app.js (FULL, 9 hari + top toast + reward popup)
-   - Daily Check-in: 9 hari (0.02 → 0.18), progress, tombol CLAIM
-   - Task Monetag: verifikasi ke /api/reward/complete (tanpa modal) + Reward Popup (jumlah sesuai)
-   - Referral: "Refer & Earn Forever" (3 langkah, Copy, share TG/WA/Twitter, list + search)
-   - Top Toast: notifikasi bar kecil di atas (Copy/Withdraw/Error)
-   - Reward Popup: kartu animasi di tengah (untuk sukses task)
-   - Fallback user untuk test di browser
+/* Watch2EarnReall — app.js (EN, server-validated)
+   - Daily Check-in: 9 days (0.02 → 0.18), server validates & credits
+   - Tasks: server validate & credit + fancy reward popup
+   - Referral: "Refer & Earn Forever" (3 steps, Copy, share TG/WA/Twitter, list + search)
+   - Top Toast: slim bar at top (Copy/Withdraw/Error)
+   - Sends Telegram initData → server via header for auth
 */
 (() => {
   // ===== Telegram & API =====
   const tg = window.Telegram?.WebApp;
   tg?.ready?.(); try { tg?.expand?.(); } catch {}
-  const API = (typeof window.API_BASE === "string" ? window.API_BASE : "");
+  const INIT = tg?.initData || ""; // send to server for validation
+  const API = ""; // (optional base path)
 
   // ===== STATE =====
   const state = {
@@ -19,19 +19,12 @@
     streak: 0,
     lastCheckin: null,
     address: localStorage.getItem("bsc_address") || "",
-    refCount: 0,
-    refBonus: 0,
-    tasks: {
-      ad1: { completed: false, reward: 0.02 },
-      ad2: { completed: false, reward: 0.02 }
-    }
+    tasks: { ad1: { completed: false, reward: 0.02 }, ad2: { completed: false, reward: 0.02 } }
   };
 
-  // ===== Check-in config (9 hari + naik 0.02) =====
+  // ===== Check-in config (9 days + +0.02) =====
   const CHECKIN_DAYS = 9;
-  const CHECKIN_REWARDS = Array.from({ length: CHECKIN_DAYS }, (_, i) =>
-    Number(((i + 1) * 0.02).toFixed(2))
-  );
+  const CHECKIN_REWARDS = Array.from({ length: CHECKIN_DAYS }, (_, i) => Number(((i + 1) * 0.02).toFixed(2)));
 
   // ===== ELEM =====
   const els = {
@@ -42,8 +35,6 @@
       profile:   document.getElementById("screen-profile"),
     },
     tabs: document.querySelectorAll(".tabbar .tab"),
-
-    // header
     balance: document.getElementById("balance"),
 
     // HOME
@@ -52,7 +43,7 @@
     btnClaim:           document.getElementById("btnClaim"),
     btnHomeRefer:       document.getElementById("btnHomeRefer"),
 
-    // REFERRAL (rebind setelah inject UI)
+    // REFERRAL (bound after inject)
     refLink: null, btnCopyRef: null,
     btnShareTG: null, btnShareWA: null, btnShareTW: null,
     refCount: null, refList: null, refSearch: null,
@@ -69,7 +60,7 @@
 
   // ===== HELPERS =====
   function money(n) { return `$${Number(n).toFixed(2)}`; }
-  function setBalance(n) { state.balance = Number(n); els.balance && (els.balance.textContent = money(state.balance)); }
+  function setBalance(n) { state.balance = Number(n); if (els.balance) els.balance.textContent = money(state.balance); }
 
   function ensureUser() {
     if (!state.user || !state.user.id) {
@@ -80,8 +71,15 @@
     }
   }
 
-  async function safeFetch(url, options) {
-    const res = await fetch(url, options);
+  async function safeFetch(path, options = {}) {
+    const res = await fetch(API + path, {
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        "X-Telegram-Init-Data": INIT, // auth header
+        ...(options.headers || {})
+      }
+    });
     let data = null;
     try { data = await res.json(); } catch {}
     if (!res.ok) throw new Error((data && (data.error || data.message)) || `HTTP ${res.status}`);
@@ -97,19 +95,11 @@
     style.textContent = `
       :root { --safe-top: 12px; }
       #topToast{
-        position: fixed;
-        top: var(--safe-top);
-        left: 50%;
-        transform: translate(-50%, -140%);
-        transition: transform .35s ease, opacity .35s ease;
-        background: linear-gradient(90deg,#1f1b2e,#37345a);
-        color:#fff; font-weight:800; font-size:13px;
-        padding:10px 14px; border-radius:999px;
-        box-shadow:0 10px 28px rgba(0,0,0,.3);
-        z-index: 2147483647;
-        pointer-events:none; opacity:0;
-        display:flex; align-items:center; gap:8px;
-        will-change: transform, opacity;
+        position: fixed; top: var(--safe-top); left: 50%;
+        transform: translate(-50%, -140%); transition: transform .35s, opacity .35s;
+        background: linear-gradient(90deg,#1f1b2e,#37345a); color:#fff; font-weight:800; font-size:13px;
+        padding:10px 14px; border-radius:999px; box-shadow:0 10px 28px rgba(0,0,0,.3);
+        z-index: 2147483647; pointer-events:none; opacity:0; display:flex; align-items:center; gap:8px;
       }
       #topToast.show{ transform: translate(-50%, 0); opacity:1; }
       #topToast.success{ background: linear-gradient(90deg,#00c853,#00e676); color:#062d1a; }
@@ -124,8 +114,7 @@
     document.documentElement.style.setProperty("--safe-top", `${topPx}px`);
   }
   function ensureToastEl() {
-    injectToastStyles();
-    updateSafeTop();
+    injectToastStyles(); updateSafeTop();
     let el = document.getElementById("topToast");
     if (!el) {
       el = document.createElement("div");
@@ -147,64 +136,37 @@
   }
   window.__toast = toast;
 
-  // ===== Reward Popup (keren) =====
+  // ===== Reward Popup (for tasks) =====
   function injectRewardPopupStyles() {
     if (document.getElementById("rewardPopupStyles")) return;
     const style = document.createElement("style");
     style.id = "rewardPopupStyles";
     style.textContent = `
-      #rewardPop{
-        position:fixed; inset:0; display:grid; place-items:center;
-        background:rgba(10,12,20,.38); backdrop-filter: blur(6px);
-        opacity:0; pointer-events:none; transition:opacity .25s ease;
-        z-index: 2147483600;
-      }
+      #rewardPop{ position:fixed; inset:0; display:grid; place-items:center; background:rgba(10,12,20,.38);
+        backdrop-filter: blur(6px); opacity:0; pointer-events:none; transition:opacity .25s; z-index:2147483600; }
       #rewardPop.show{ opacity:1; pointer-events:auto; }
-      .rp-card{
-        width: 86%; max-width: 380px;
-        background: radial-gradient(120% 140% at 50% 0%, #a44ff4 0%, #c86bfa 40%, #ff7eb3 100%);
-        color:#fff; border-radius:22px; padding:18px;
-        border:1px solid rgba(255,255,255,.35);
-        box-shadow:0 24px 64px rgba(164,79,244,.45);
-        transform: scale(.9); transition: transform .25s ease;
-        position:relative; overflow:hidden;
-      }
-      #rewardPop.show .rp-card{ transform: scale(1); }
-      .rp-sheen{
-        content:""; position:absolute; inset:-40% -20% auto -20%;
-        height:140%; background: linear-gradient(120deg, transparent, rgba(255,255,255,.25), transparent);
-        transform: rotate(12deg); animation: sheen 2s linear infinite;
-      }
+      .rp-card{ width:86%; max-width:380px; background: radial-gradient(120% 140% at 50% 0%, #a44ff4 0%, #c86bfa 40%, #ff7eb3 100%);
+        color:#fff; border-radius:22px; padding:18px; border:1px solid rgba(255,255,255,.35); box-shadow:0 24px 64px rgba(164,79,244,.45);
+        transform:scale(.9); transition: transform .25s; position:relative; overflow:hidden; }
+      #rewardPop.show .rp-card{ transform:scale(1); }
+      .rp-sheen{ position:absolute; inset:-40% -20% auto -20%; height:140%;
+        background: linear-gradient(120deg, transparent, rgba(255,255,255,.25), transparent);
+        transform: rotate(12deg); animation: sheen 2s linear infinite; }
       @keyframes sheen { from{ left:-60% } to{ left:120% } }
-
-      .rp-coin{
-        width:64px; height:64px; border-radius:50%;
-        display:grid; place-items:center;
-        background: radial-gradient(100% 100% at 50% 30%, #fff59d, #ffc107);
-        color:#7a4b00; font-size:28px; font-weight:900;
-        box-shadow: 0 10px 24px rgba(0,0,0,.25), inset 0 2px 8px rgba(255,255,255,.6);
-        margin:6px auto 10px;
-      }
-      .rp-amt{
-        text-align:center; font-size:28px; font-weight:1000; letter-spacing:.3px;
-        background: linear-gradient(90deg,#ffffff,#ffe082,#ffca28,#ffa000);
-        -webkit-background-clip:text; -webkit-text-fill-color: transparent;
-      }
+      .rp-coin{ width:64px; height:64px; border-radius:50%; display:grid; place-items:center; background: radial-gradient(100% 100% at 50% 30%, #fff59d, #ffc107);
+        color:#7a4b00; font-size:28px; font-weight:900; box-shadow:0 10px 24px rgba(0,0,0,.25), inset 0 2px 8px rgba(255,255,255,.6); margin:6px auto 10px; }
+      .rp-amt{ text-align:center; font-size:28px; font-weight:1000; letter-spacing:.3px; background: linear-gradient(90deg,#ffffff,#ffe082,#ffca28,#ffa000);
+        -webkit-background-clip:text; -webkit-text-fill-color: transparent; }
       .rp-msg{ text-align:center; margin-top:4px; opacity:.95; font-weight:700; }
       .rp-actions{ display:flex; justify-content:center; margin-top:12px; }
-      .rp-ok{
-        border:none; color:#6a32c9; background:#fff; font-weight:900;
-        padding:10px 16px; border-radius:14px; min-width:120px;
-        box-shadow: 0 8px 20px rgba(255,255,255,.28);
-      }
+      .rp-ok{ border:none; color:#6a32c9; background:#fff; font-weight:900; padding:10px 16px; border-radius:14px; min-width:120px;
+        box-shadow: 0 8px 20px rgba(255,255,255,.28); }
     `;
     document.head.appendChild(style);
   }
-  function showRewardPopup(amount=0.00, message="Reward ditambahkan!") {
+  function showRewardPopup(amount=0.00, message="Reward added!") {
     injectRewardPopupStyles();
-    const old = document.getElementById("rewardPop");
-    if (old) old.remove();
-
+    const old = document.getElementById("rewardPop"); if (old) old.remove();
     const wrap = document.createElement("div");
     wrap.id = "rewardPop";
     const amt = `$${Number(amount).toFixed(2)}`;
@@ -215,17 +177,12 @@
         <div class="rp-amt">+${amt}</div>
         <div class="rp-msg">${message}</div>
         <div class="rp-actions"><button class="rp-ok">OK</button></div>
-      </div>
-    `;
+      </div>`;
     document.body.appendChild(wrap);
-
     const close = () => { wrap.classList.remove("show"); setTimeout(()=>wrap.remove(), 220); };
     wrap.querySelector(".rp-ok").addEventListener("click", close);
     wrap.addEventListener("click", (e)=>{ if(e.target.id==="rewardPop") close(); });
-
-    // tampilkan
     requestAnimationFrame(()=> wrap.classList.add("show"));
-    // auto-close
     setTimeout(close, 1800);
   }
 
@@ -233,26 +190,19 @@
   function loadPersisted() {
     const s = localStorage.getItem("checkin_state");
     if (s) {
-      try {
-        const j = JSON.parse(s);
-        state.streak = j.streak || 0;
-        state.lastCheckin = j.lastCheckin || null;
-      } catch {}
+      try { const j = JSON.parse(s); state.streak = j.streak || 0; state.lastCheckin = j.lastCheckin || null; } catch {}
     }
     if (state.address) els.bscAddress && (els.bscAddress.value = state.address);
   }
   function saveCheckin() {
-    localStorage.setItem("checkin_state", JSON.stringify({
-      streak: state.streak,
-      lastCheckin: state.lastCheckin
-    }));
+    localStorage.setItem("checkin_state", JSON.stringify({ streak: state.streak, lastCheckin: state.lastCheckin }));
   }
   function todayStr() {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
   }
 
-  // ===== HOME: CHECK-IN (9 hari) =====
+  // ===== HOME: CHECK-IN (9 days) =====
   function canClaimToday() {
     const today = todayStr();
     return state.lastCheckin !== today && state.streak < CHECKIN_DAYS;
@@ -260,49 +210,48 @@
 
   function renderCheckinTiles() {
     if (!els.checkinTiles) return;
-
     const days = Array.from({ length: CHECKIN_DAYS }, (_, i) => i + 1);
     const next = Math.min(state.streak + 1, CHECKIN_DAYS);
-
     els.checkinTiles.innerHTML = days.map(d => {
       let cls = "day-tile";
       if (d <= state.streak) cls += " done";
       else if (d === next && canClaimToday()) cls += " current";
       else if (d > next) cls += " locked";
-
       const reward = CHECKIN_REWARDS[d - 1].toFixed(2);
-      return `<div class="${cls}" data-day="${d}">
-                Day ${d}<small>${reward}</small>
-              </div>`;
+      return `<div class="${cls}" data-day="${d}">Day ${d}<small>${reward}</small></div>`;
     }).join("");
-
     if (els.checkinProgressBar) {
       const pct = (state.streak / CHECKIN_DAYS) * 100;
       els.checkinProgressBar.style.width = `${pct}%`;
     }
-
     if (els.btnClaim) {
       els.btnClaim.disabled = !canClaimToday();
       const span = els.btnClaim.querySelector("#claimText");
-      if (span) span.textContent = canClaimToday() ? "Claim Bonus" : "Sudah Check-in";
+      if (span) span.textContent = canClaimToday() ? "Claim Bonus" : "Already checked-in";
     }
   }
 
   async function claimToday() {
-    if (!canClaimToday()) return;
-    const idx = Math.min(state.streak, CHECKIN_DAYS - 1);
-    const reward = CHECKIN_REWARDS[idx];
-
-    state.lastCheckin = todayStr();
-    state.streak = Math.min(CHECKIN_DAYS, (state.streak || 0) + 1);
-    saveCheckin();
-    renderCheckinTiles();
-    setBalance(state.balance + reward);
-
-    toast(`Check-in berhasil! +$${reward.toFixed(2)}`, "success");
+    // use server validation
+    try {
+      const data = await safeFetch(`/api/checkin/claim`, { method: "POST", body: JSON.stringify({}) });
+      // server returns { ok, amount, streak, lastCheckin, balance }
+      if (data?.ok) {
+        state.streak = data.streak ?? state.streak;
+        state.lastCheckin = data.lastCheckin ?? state.lastCheckin;
+        saveCheckin();
+        setBalance(data.balance ?? state.balance);
+        renderCheckinTiles();
+        toast(`Check-in successful! +$${Number(data.amount||0).toFixed(2)}`, "success");
+      } else {
+        toast(data?.error || "Check-in failed.", "error");
+      }
+    } catch (e) {
+      toast("Failed to reach server.", "error");
+    }
   }
 
-  // ===== TASKS (tanpa modal, + Reward Popup) =====
+  // ===== TASKS (server-validated + reward popup) =====
   function initTasks() {
     document.querySelectorAll(".task-card .btn-cta[data-action='watch']").forEach(btn => {
       btn.addEventListener("click", async () => {
@@ -310,31 +259,25 @@
         if (!taskId) return;
         if (state.tasks[taskId]?.completed) return;
 
-        // tampilkan iklan monetag (opsional)
+        // Optional: trigger Monetag ad
         try { const fn = window[window.MONETAG_FN]; if (typeof fn === "function") fn(); } catch {}
 
         try {
           const data = await safeFetch(`/api/reward/complete`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ user_id: String(state.user?.id), task_id: taskId })
+            body: JSON.stringify({ task_id: taskId })
           });
-
           if (data?.credited) {
-            state.tasks[taskId].completed = true;
             const amt = typeof data.amount === "number" ? data.amount : (state.tasks[taskId].reward || 0);
-            setBalance(state.balance + (amt || 0));
+            state.tasks[taskId].completed = true;
+            setBalance(data.balance ?? (state.balance + amt));
             btn.disabled = true;
-
-            // >>> POPUP REWARD KEREN <<<
-            showRewardPopup(amt, "Reward ditambahkan!");
-
+            showRewardPopup(amt, "Reward added!");
           } else {
-            toast("Verifikasi gagal.", "error");
+            toast(data?.error || "Verification failed.", "error");
           }
         } catch (e) {
-          console.error(e);
-          toast("Gagal konek server.", "error");
+          toast("Failed to reach server.", "error");
         }
       });
     });
@@ -373,55 +316,38 @@
   }
 
   function injectReferralUI() {
-    const box = els.screens.referral;
-    if (!box) return;
+    const box = els.screens.referral; if (!box) return;
     box.innerHTML = `
       <div class="ref-hero glass card">
         <div class="ref-hero-head">
           <h2>Refer & Earn Forever</h2>
           <div class="ref-badge">25%</div>
         </div>
-        <p class="muted">Earn <strong>25%</strong> of your friends earnings for life! Follow these simple steps to start:</p>
-
+        <p class="muted">Earn <strong>25%</strong> of your friends' earnings for life! Follow these simple steps:</p>
         <ul class="ref-steps">
-          <li>
-            <div class="ref-ico">🔗</div>
-            <div><strong>1. Copy Your Link</strong><br><small>Grab your unique referral link below.</small></div>
-          </li>
-          <li>
-            <div class="ref-ico">📣</div>
-            <div><strong>2. Share with Friends</strong><br><small>Use the Telegram, WhatsApp, or Twitter/X buttons to share.</small></div>
-          </li>
-          <li>
-            <div class="ref-ico">💰</div>
-            <div><strong>3. Earn Lifetime Rewards</strong><br><small>Get 25% of your friends earnings forever once they join!</small></div>
-          </li>
+          <li><div class="ref-ico">🔗</div><div><strong>1. Copy Your Link</strong><br><small>Grab your unique referral link below.</small></div></li>
+          <li><div class="ref-ico">📣</div><div><strong>2. Share with Friends</strong><br><small>Use Telegram, WhatsApp, or Twitter/X buttons.</small></div></li>
+          <li><div class="ref-ico">💰</div><div><strong>3. Earn Lifetime Rewards</strong><br><small>Get 25% of your friends' earnings forever!</small></div></li>
         </ul>
-
         <h3 class="ref-subtitle">Your Referral Link</h3>
         <div class="ref-input-group">
           <input id="refLink" readonly value="Generating…"/>
           <button id="btnCopyRef" class="btn copy-pill">Copy</button>
         </div>
-
         <div class="ref-share-buttons">
           <button id="btnShareTG" class="btn brand tg">Telegram</button>
           <button id="btnShareWA" class="btn brand wa">WhatsApp</button>
           <button id="btnShareTW" class="btn brand tw">Twitter/X</button>
         </div>
       </div>
-
       <div class="glass card ref-list-card">
         <div class="ref-list-head">
           <h3>Referrals</h3>
           <div class="ref-count-badge"><span id="refCount">0</span></div>
         </div>
-        <div class="ref-search-row">
-          <input id="refSearch" placeholder="Search referrals by username…"/>
-        </div>
+        <div class="ref-search-row"><input id="refSearch" placeholder="Search referrals by username…"/></div>
         <div id="refList" class="ref-empty">Your referrals will appear here.</div>
-      </div>
-    `;
+      </div>`;
   }
 
   function bindReferralEls() {
@@ -444,18 +370,15 @@
   function copy(text) {
     try { navigator.clipboard.writeText(text); toast("Link copied!", "success"); }
     catch {
-      const ta = document.createElement("textarea");
-      ta.value = text; document.body.appendChild(ta); ta.select();
+      const ta = document.createElement("textarea"); ta.value = text; document.body.appendChild(ta); ta.select();
       document.execCommand("copy"); ta.remove(); toast("Link copied!", "success");
     }
   }
   function initReferralButtons() {
-    // Copy
     els.btnCopyRef?.addEventListener("click", () => els.refLink && copy(els.refLink.value));
-    // Share handlers
     const share = (platform) => {
       const url  = els.refLink?.value || `https://t.me/${window.BOT_USERNAME}?start=ref_${state.user?.id||"guest"}`;
-      const text = "Join Watch2EarnReall dan dapatkan reward nonton iklan!";
+      const text = "Join Watch2EarnReall and earn by watching ads!";
       if (navigator.share) { navigator.share({ title:"Watch2EarnReall", text, url }).catch(()=>{}); return; }
       const open = (u) => window.open(u, "_blank");
       if (platform === "tg") open(`https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`);
@@ -465,8 +388,6 @@
     els.btnShareTG?.addEventListener("click", ()=>share("tg"));
     els.btnShareWA?.addEventListener("click", ()=>share("wa"));
     els.btnShareTW?.addEventListener("click", ()=>share("tw"));
-
-    // Search filter
     els.refSearch?.addEventListener("input", () => {
       const q = els.refSearch.value.toLowerCase();
       document.querySelectorAll("#refList .ref-item").forEach(el => {
@@ -477,17 +398,15 @@
 
   async function fetchReferrals() {
     try {
-      const data = await safeFetch(`/api/referrals?user_id=${encodeURIComponent(state.user?.id || "guest")}`);
+      const data = await safeFetch(`/api/referrals`);
       els.refCount && (els.refCount.textContent = data?.count ?? 0);
       const list = Array.isArray(data?.list) ? data.list : [];
       if (els.refList) {
         els.refList.classList.remove("ref-empty");
         els.refList.innerHTML = list.length
           ? list.map(r => (
-              `<div class="ref-item">
-                 <div class="avatar"></div>
-                 <div>${r?.name || "User"}<br><small>${r?.joined || ""}</small></div>
-               </div>`
+              `<div class="ref-item"><div class="avatar"></div>
+                 <div>${r?.name || "User"}<br><small>${r?.joined || ""}</small></div></div>`
             )).join("")
           : "Your referrals will appear here.";
       }
@@ -501,7 +420,6 @@
     const username = u?.username ? `@${u.username}` : (u ? `id:${u.id}` : "@guest");
     els.profileName && (els.profileName.textContent = name);
     els.profileUsername && (els.profileUsername.textContent = username);
-
     const photo = u?.photo_url;
     if (photo && els.profileAvatar) {
       const img = new Image(); img.src = photo; img.alt = "Avatar";
@@ -516,17 +434,16 @@
     els.withdrawForm?.addEventListener("submit", async (e) => {
       e.preventDefault();
       const amount = Number(els.withdrawAmount.value);
-      if (isNaN(amount) || amount < 1) return toast("Minimum withdraw 1$", "error");
-      if (!state.address) return toast("Isi alamat BEP20 dulu.", "error");
+      if (isNaN(amount) || amount < 1) return toast("Minimum withdraw is $1", "error");
+      if (!state.address) return toast("Please fill your BEP20 address first.", "error");
       try {
         const data = await safeFetch(`/api/withdraw`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ user_id: String(state.user?.id), amount, address: state.address })
+          body: JSON.stringify({ amount, address: state.address })
         });
-        if (data?.ok) { toast("Permintaan withdraw dikirim.", "success"); els.withdrawAmount.value = ""; }
-        else { toast(data?.error || "Gagal withdraw.", "error"); }
-      } catch { toast("Gagal konek server.", "error"); }
+        if (data?.ok) { toast("Withdrawal request submitted.", "success"); els.withdrawAmount.value = ""; }
+        else { toast(data?.error || "Withdraw failed.", "error"); }
+      } catch { toast("Failed to reach server.", "error"); }
     });
   }
 
@@ -534,16 +451,15 @@
     els.addressForm?.addEventListener("submit", async (e) => {
       e.preventDefault();
       const addr = (els.bscAddress.value || "").trim();
-      if (!/^0x[a-fA-F0-9]{40}$/.test(addr)) return toast("Alamat BEP20 tidak valid.", "error");
+      if (!/^0x[a-fA-F0-9]{40}$/.test(addr)) return toast("Invalid BEP20 address.", "error");
       state.address = addr; localStorage.setItem("bsc_address", addr);
       try {
         await safeFetch(`/api/address/save`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ user_id: String(state.user?.id), address: addr })
+          body: JSON.stringify({ address: addr })
         });
-        toast("Alamat disimpan.", "success");
-      } catch { toast("Gagal menyimpan alamat (server).", "error"); }
+        toast("Address saved.", "success");
+      } catch { toast("Failed to save address.", "error"); }
     });
   }
 
@@ -556,6 +472,17 @@
     els.tabs.forEach(tab => tab.addEventListener("click", () => setScreen(tab.dataset.target)));
   }
 
+  // ===== SERVER USER SYNC =====
+  async function syncUser() {
+    try {
+      const data = await safeFetch(`/api/user/get`);
+      if (typeof data.balance === "number") setBalance(data.balance);
+      if (typeof data.streak === "number") state.streak = data.streak;
+      if (data.lastCheckin) state.lastCheckin = data.lastCheckin;
+      renderCheckinTiles();
+    } catch { /* ignore */ }
+  }
+
   // ===== INIT =====
   function init() {
     ensureUser();
@@ -563,35 +490,26 @@
     setProfile();
     setBalance(state.balance);
 
-    // Toasts
-    injectToastStyles();
-    updateSafeTop();
+    injectToastStyles(); updateSafeTop();
     window.Telegram?.WebApp?.onEvent?.("viewportChanged", updateSafeTop);
 
     // Referral
-    injectReferralStyles();
-    injectReferralUI();
-    bindReferralEls();
-    setReferralLink();
+    injectReferralStyles(); injectReferralUI(); bindReferralEls(); setReferralLink();
 
     // HOME
     renderCheckinTiles();
     els.btnClaim?.addEventListener("click", claimToday);
 
     // NAV/REF/TASK/FORM
-    initTabs();
-    initReferralButtons();
-    initTasks();
-    initWithdrawForm();
-    initAddressForm();
+    initTabs(); initReferralButtons(); initTasks(); initWithdrawForm(); initAddressForm();
 
     // Data
-    fetchReferrals();
+    syncUser(); fetchReferrals();
 
     // Theme
     document.body.dataset.tg = tg?.colorScheme || "light";
 
-    // (opsional) tombol refer di Home -> buka tab referral
+    // Home → referral shortcut
     els.btnHomeRefer?.addEventListener?.("click", () => {
       document.querySelector('.tab[data-target="referral"]')?.click();
     });
