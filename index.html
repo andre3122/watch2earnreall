@@ -95,28 +95,55 @@
         </div>
       </section>
 <section id="screen-referral" class="screen">
-  <div class="section-title">
-    <h2>Refer & Earn</h2>
-    <p class="muted">Share your referral link to grow faster.</p>
-  </div>
+  <!-- HERO CARD -->
+  <div class="ref-hero glass card">
+    <div class="ref-hero-head">
+      <h2>Refer & Earn Forever</h2>
+      <div class="ref-badge">25%</div>
+    </div>
+    <p class="muted">Earn <strong>25%</strong> of your friends earnings for life! Follow these simple steps to start:</p>
 
-  <!-- Kartu link + Copy (tanpa tombol Bagikan) -->
-  <div class="glass card ref-card">
-    <div class="ref-row">
+    <ul class="ref-steps">
+      <li>
+        <div class="ref-ico">🔗</div>
+        <div><strong>1. Copy Your Link</strong><br><small>Grab your unique referral link below.</small></div>
+      </li>
+      <li>
+        <div class="ref-ico">📣</div>
+        <div><strong>2. Share with Friends</strong><br><small>Use the Telegram, WhatsApp, or Twitter/X buttons to share.</small></div>
+      </li>
+      <li>
+        <div class="ref-ico">💰</div>
+        <div><strong>3. Earn Lifetime Rewards</strong><br><small>Get 25% of your friends earnings forever once they join!</small></div>
+      </li>
+    </ul>
+
+    <h3 class="ref-subtitle">Your Referral Link</h3>
+    <div class="ref-input-group">
       <input id="refLink" readonly value="Generating…"/>
       <button id="btnCopyRef" class="btn copy-pill">Copy</button>
     </div>
+
+    <div class="ref-share-buttons">
+      <button id="btnShareTG" class="btn brand tg">Telegram</button>
+      <button id="btnShareWA" class="btn brand wa">WhatsApp</button>
+      <button id="btnShareTW" class="btn brand tw">Twitter/X</button>
+    </div>
   </div>
 
-  <!-- Kartu statistik & list -->
-  <div class="glass card ref-stats-card">
-    <div class="ref-stats-head">
+  <!-- LIST CARD -->
+  <div class="glass card ref-list-card">
+    <div class="ref-list-head">
       <h3>Referrals</h3>
       <div class="ref-count-badge"><span id="refCount">0</span></div>
+    </div>
+    <div class="ref-search-row">
+      <input id="refSearch" placeholder="Search referrals by username…"/>
     </div>
     <div id="refList" class="ref-empty">Your referrals will appear here.</div>
   </div>
 </section>
+      
       
       <section id="screen-profile" class="screen">
         <div class="profile-top">
