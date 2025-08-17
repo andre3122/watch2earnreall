@@ -1,8 +1,9 @@
-/* Watch2EarnReall — app.js (FULL, 9 hari + top toast)
+/* Watch2EarnReall — app.js (FULL, 9 hari + top toast + reward popup)
    - Daily Check-in: 9 hari (0.02 → 0.18), progress, tombol CLAIM
-   - Task Monetag: verifikasi ke /api/reward/complete (tanpa modal)
+   - Task Monetag: verifikasi ke /api/reward/complete (tanpa modal) + Reward Popup (jumlah sesuai)
    - Referral: "Refer & Earn Forever" (3 langkah, Copy, share TG/WA/Twitter, list + search)
-   - Top Toast: notifikasi bar kecil di atas (untuk Copy/Reward/Withdraw/Error)
+   - Top Toast: notifikasi bar kecil di atas (Copy/Withdraw/Error)
+   - Reward Popup: kartu animasi di tengah (untuk sukses task)
    - Fallback user untuk test di browser
 */
 (() => {
@@ -119,7 +120,7 @@
   }
   function updateSafeTop() {
     const inset = (window.Telegram?.WebApp?.safeAreaInset?.top || 0);
-    const topPx = Math.max(8, inset || 0) + 8; // fallback nyaman
+    const topPx = Math.max(8, inset || 0) + 8;
     document.documentElement.style.setProperty("--safe-top", `${topPx}px`);
   }
   function ensureToastEl() {
@@ -144,8 +145,89 @@
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => el.classList.remove("show"), 1600);
   }
-  // debug helper
   window.__toast = toast;
+
+  // ===== Reward Popup (keren) =====
+  function injectRewardPopupStyles() {
+    if (document.getElementById("rewardPopupStyles")) return;
+    const style = document.createElement("style");
+    style.id = "rewardPopupStyles";
+    style.textContent = `
+      #rewardPop{
+        position:fixed; inset:0; display:grid; place-items:center;
+        background:rgba(10,12,20,.38); backdrop-filter: blur(6px);
+        opacity:0; pointer-events:none; transition:opacity .25s ease;
+        z-index: 2147483600;
+      }
+      #rewardPop.show{ opacity:1; pointer-events:auto; }
+      .rp-card{
+        width: 86%; max-width: 380px;
+        background: radial-gradient(120% 140% at 50% 0%, #a44ff4 0%, #c86bfa 40%, #ff7eb3 100%);
+        color:#fff; border-radius:22px; padding:18px;
+        border:1px solid rgba(255,255,255,.35);
+        box-shadow:0 24px 64px rgba(164,79,244,.45);
+        transform: scale(.9); transition: transform .25s ease;
+        position:relative; overflow:hidden;
+      }
+      #rewardPop.show .rp-card{ transform: scale(1); }
+      .rp-sheen{
+        content:""; position:absolute; inset:-40% -20% auto -20%;
+        height:140%; background: linear-gradient(120deg, transparent, rgba(255,255,255,.25), transparent);
+        transform: rotate(12deg); animation: sheen 2s linear infinite;
+      }
+      @keyframes sheen { from{ left:-60% } to{ left:120% } }
+
+      .rp-coin{
+        width:64px; height:64px; border-radius:50%;
+        display:grid; place-items:center;
+        background: radial-gradient(100% 100% at 50% 30%, #fff59d, #ffc107);
+        color:#7a4b00; font-size:28px; font-weight:900;
+        box-shadow: 0 10px 24px rgba(0,0,0,.25), inset 0 2px 8px rgba(255,255,255,.6);
+        margin:6px auto 10px;
+      }
+      .rp-amt{
+        text-align:center; font-size:28px; font-weight:1000; letter-spacing:.3px;
+        background: linear-gradient(90deg,#ffffff,#ffe082,#ffca28,#ffa000);
+        -webkit-background-clip:text; -webkit-text-fill-color: transparent;
+      }
+      .rp-msg{ text-align:center; margin-top:4px; opacity:.95; font-weight:700; }
+      .rp-actions{ display:flex; justify-content:center; margin-top:12px; }
+      .rp-ok{
+        border:none; color:#6a32c9; background:#fff; font-weight:900;
+        padding:10px 16px; border-radius:14px; min-width:120px;
+        box-shadow: 0 8px 20px rgba(255,255,255,.28);
+      }
+    `;
+    document.head.appendChild(style);
+  }
+  function showRewardPopup(amount=0.00, message="Reward ditambahkan!") {
+    injectRewardPopupStyles();
+    const old = document.getElementById("rewardPop");
+    if (old) old.remove();
+
+    const wrap = document.createElement("div");
+    wrap.id = "rewardPop";
+    const amt = `$${Number(amount).toFixed(2)}`;
+    wrap.innerHTML = `
+      <div class="rp-card">
+        <div class="rp-sheen"></div>
+        <div class="rp-coin">★</div>
+        <div class="rp-amt">+${amt}</div>
+        <div class="rp-msg">${message}</div>
+        <div class="rp-actions"><button class="rp-ok">OK</button></div>
+      </div>
+    `;
+    document.body.appendChild(wrap);
+
+    const close = () => { wrap.classList.remove("show"); setTimeout(()=>wrap.remove(), 220); };
+    wrap.querySelector(".rp-ok").addEventListener("click", close);
+    wrap.addEventListener("click", (e)=>{ if(e.target.id==="rewardPop") close(); });
+
+    // tampilkan
+    requestAnimationFrame(()=> wrap.classList.add("show"));
+    // auto-close
+    setTimeout(close, 1800);
+  }
 
   // ===== PERSIST / DATE =====
   function loadPersisted() {
@@ -220,7 +302,7 @@
     toast(`Check-in berhasil! +$${reward.toFixed(2)}`, "success");
   }
 
-  // ===== TASKS (tanpa modal) =====
+  // ===== TASKS (tanpa modal, + Reward Popup) =====
   function initTasks() {
     document.querySelectorAll(".task-card .btn-cta[data-action='watch']").forEach(btn => {
       btn.addEventListener("click", async () => {
@@ -228,11 +310,8 @@
         if (!taskId) return;
         if (state.tasks[taskId]?.completed) return;
 
-        // show ad (optional)
-        try {
-          const fn = window[window.MONETAG_FN];
-          if (typeof fn === "function") fn();
-        } catch {}
+        // tampilkan iklan monetag (opsional)
+        try { const fn = window[window.MONETAG_FN]; if (typeof fn === "function") fn(); } catch {}
 
         try {
           const data = await safeFetch(`/api/reward/complete`, {
@@ -243,9 +322,13 @@
 
           if (data?.credited) {
             state.tasks[taskId].completed = true;
-            setBalance(state.balance + (state.tasks[taskId].reward || 0));
+            const amt = typeof data.amount === "number" ? data.amount : (state.tasks[taskId].reward || 0);
+            setBalance(state.balance + (amt || 0));
             btn.disabled = true;
-            toast("Reward ditambahkan!", "success");
+
+            // >>> POPUP REWARD KEREN <<<
+            showRewardPopup(amt, "Reward ditambahkan!");
+
           } else {
             toast("Verifikasi gagal.", "error");
           }
@@ -366,11 +449,9 @@
       document.execCommand("copy"); ta.remove(); toast("Link copied!", "success");
     }
   }
-
   function initReferralButtons() {
     // Copy
     els.btnCopyRef?.addEventListener("click", () => els.refLink && copy(els.refLink.value));
-
     // Share handlers
     const share = (platform) => {
       const url  = els.refLink?.value || `https://t.me/${window.BOT_USERNAME}?start=ref_${state.user?.id||"guest"}`;
@@ -410,9 +491,7 @@
             )).join("")
           : "Your referrals will appear here.";
       }
-    } catch {
-      // silent
-    }
+    } catch { /* silent */ }
   }
 
   // ===== PROFILE / WITHDRAW / ADDRESS =====
@@ -484,7 +563,7 @@
     setProfile();
     setBalance(state.balance);
 
-    // Toast
+    // Toasts
     injectToastStyles();
     updateSafeTop();
     window.Telegram?.WebApp?.onEvent?.("viewportChanged", updateSafeTop);
