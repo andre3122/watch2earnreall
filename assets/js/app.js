@@ -534,7 +534,14 @@
 
     // Data
     syncUser(); fetchReferrals();
-
+// === DEBUG: auto cek whoami saat start_param = "debug" ===
+const startParam = tg?.initDataUnsafe?.start_param || "";
+if (startParam === "debug") {
+  safeFetch("/api/debug/whoami")
+    .then(d => alert("WHOAMI:\n" + JSON.stringify(d, null, 2)))
+    .catch(e => alert("ERR: " + e.message));
+}
+     
     // Theme
     document.body.dataset.tg = tg?.colorScheme || "light";
 
