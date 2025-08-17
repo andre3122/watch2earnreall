@@ -1,16 +1,16 @@
 /* Watch2EarnReall — app.js (EN, server-validated)
    - Daily Check-in: 9 days (0.02 → 0.18), server validates & credits
    - Tasks: server validate & credit + fancy reward popup
-   - Referral: "Refer & Earn Forever" (3 steps, Copy, share TG/WA/Twitter, list + search)
-   - Top Toast: slim bar at top (Copy/Withdraw/Error)
+   - Referral: "Refer & Earn Forever" (3 steps, Copy / TG / WA / Twitter/X, list + search)
+   - Top Toast: slim bar at top (Copy/Withdraw/Error/Info)
    - Sends Telegram initData → server via header for auth
 */
 (() => {
   // ===== Telegram & API =====
   const tg = window.Telegram?.WebApp;
   tg?.ready?.(); try { tg?.expand?.(); } catch {}
-  const INIT = tg?.initData || ""; // send to server for validation
-  const API = ""; // (optional base path)
+  const INIT = tg?.initData || ""; // sent to server in header
+  const API = ""; // optional base path
 
   // ===== STATE =====
   const state = {
@@ -20,14 +20,18 @@
     lastCheckin: null,
     address: localStorage.getItem("bsc_address") || "",
     tasks: {
-    ad1: { completed: false, reward: 0.01 },
-    ad2: { completed: false, reward: 0.01 }
-  }
-  // ===== Check-in config (9 days + +0.02) =====
+      ad1: { completed: false, reward: 0.01 },
+      ad2: { completed: false, reward: 0.01 }
+    }
+  };
+
+  // ===== Check-in config (9 days, +0.02 per day) =====
   const CHECKIN_DAYS = 9;
-  const CHECKIN_REWARDS = Array.from({ length: CHECKIN_DAYS }, (_, i) => Number(((i + 1) * 0.02).toFixed(2)));
-let checkinSession = { token: null, done: false };
-   
+  const CHECKIN_REWARDS = Array.from({ length: CHECKIN_DAYS }, (_, i) =>
+    Number(((i + 1) * 0.02).toFixed(2))
+  );
+  let checkinSession = { token: null, done: false }; // reserved (client-side gate)
+
   // ===== ELEM =====
   const els = {
     screens: {
@@ -64,6 +68,7 @@ let checkinSession = { token: null, done: false };
   function money(n) { return `$${Number(n).toFixed(2)}`; }
   function setBalance(n) { state.balance = Number(n); if (els.balance) els.balance.textContent = money(state.balance); }
 
+  // Browser fallback user (safe for local tests)
   function ensureUser() {
     if (!state.user || !state.user.id) {
       const saved = localStorage.getItem("demo_uid");
@@ -73,20 +78,18 @@ let checkinSession = { token: null, done: false };
     }
   }
 
-  // STRICT: hanya menerima request dari Telegram Mini App
-async function safeFetch(path, options = {}) {
-  const tgRaw = window.Telegram?.WebApp?.initData || "";
-  const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
+  // STRICT: send Telegram initData so server can validate auth
+  async function safeFetch(path, options = {}) {
+    const tgRaw = window.Telegram?.WebApp?.initData || "";
+    const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
+    if (tgRaw) headers["x-telegram-init-data"] = tgRaw;
 
-  // kirim header Telegram (WAJIB saat di Mini App)
-  if (tgRaw) headers["x-telegram-init-data"] = tgRaw;
-
-  const res = await fetch(API + path, { ...options, headers });
-  let data = null;
-  try { data = await res.json(); } catch {}
-  if (!res.ok) throw new Error((data && (data.error || data.message)) || `HTTP ${res.status}`);
-  return data || {};
-}
+    const res = await fetch(API + path, { ...options, headers });
+    let data = null;
+    try { data = await res.json(); } catch {}
+    if (!res.ok) throw new Error((data && (data.error || data.message)) || `HTTP ${res.status}`);
+    return data || {};
+  }
 
   // ===== Top Toast (safe-area aware) =====
   let toastTimer = null;
@@ -214,6 +217,7 @@ async function safeFetch(path, options = {}) {
     if (!els.checkinTiles) return;
     const days = Array.from({ length: CHECKIN_DAYS }, (_, i) => i + 1);
     const next = Math.min(state.streak + 1, CHECKIN_DAYS);
+
     els.checkinTiles.innerHTML = days.map(d => {
       let cls = "day-tile";
       if (d <= state.streak) cls += " done";
@@ -222,6 +226,7 @@ async function safeFetch(path, options = {}) {
       const reward = CHECKIN_REWARDS[d - 1].toFixed(2);
       return `<div class="${cls}" data-day="${d}">Day ${d}<small>${reward}</small></div>`;
     }).join("");
+
     if (els.checkinProgressBar) {
       const pct = (state.streak / CHECKIN_DAYS) * 100;
       els.checkinProgressBar.style.width = `${pct}%`;
@@ -233,11 +238,23 @@ async function safeFetch(path, options = {}) {
     }
   }
 
+  // Client-side ad gate + server validation claim
+  async function onClickClaimCheckin() {
+    if (!canClaimToday()) { toast("Already checked-in.", "error"); return; }
+
+    // 1) Try to show ad first (client-side gate)
+    try {
+      const fn = window[window.MONETAG_FN];
+      if (typeof fn === "function") fn(); // show Monetag ad if integrated
+    } catch {}
+
+    // 2) Then request claim to server (server validates lastCheckin/streak)
+    await claimToday();
+  }
+
   async function claimToday() {
-    // use server validation
     try {
       const data = await safeFetch(`/api/checkin/claim`, { method: "POST", body: JSON.stringify({}) });
-      // server returns { ok, amount, streak, lastCheckin, balance }
       if (data?.ok) {
         state.streak = data.streak ?? state.streak;
         state.lastCheckin = data.lastCheckin ?? state.lastCheckin;
@@ -493,6 +510,7 @@ async function safeFetch(path, options = {}) {
     setBalance(state.balance);
 
     injectToastStyles(); updateSafeTop();
+    window.addEventListener("resize", updateSafeTop);
     window.Telegram?.WebApp?.onEvent?.("viewportChanged", updateSafeTop);
 
     // Referral
@@ -501,7 +519,7 @@ async function safeFetch(path, options = {}) {
     // HOME
     renderCheckinTiles();
     els.btnClaim?.addEventListener("click", onClickClaimCheckin);
-     
+
     // NAV/REF/TASK/FORM
     initTabs(); initReferralButtons(); initTasks(); initWithdrawForm(); initAddressForm();
 
@@ -516,5 +534,6 @@ async function safeFetch(path, options = {}) {
       document.querySelector('.tab[data-target="referral"]')?.click();
     });
   }
+
   init();
 })();
