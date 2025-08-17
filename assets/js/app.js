@@ -1,9 +1,9 @@
-/* Watch2EarnReall — app.js (FULL)
-   - Daily Check-in: kotak besar 2 baris + progress + tombol CLAIM
-   - Home Referral card (Start Referring)
-   - Task: nonton iklan (Monetag) -> langsung request reward (tanpa modal)
+/* Watch2EarnReall — app.js (FULL, 9 hari)
+   - Daily Check-in: 9 hari, kotak besar (lebih kecil dari sebelumnya), progress bar, tombol CLAIM
+   - Reward harian: day1=0.02 ... day9=0.18 (+0.02 per hari)
+   - Task Monetag: langsung verifikasi ke /api/reward/complete (tanpa modal)
+   - Home Referral card ("Start Referring")
    - Fallback user untuk test di browser
-   - Tetap kompatibel dengan section Task/Referral/Profil yang sudah ada
 */
 (() => {
   // ===== Telegram & API =====
@@ -15,8 +15,8 @@
   const state = {
     user: tg?.initDataUnsafe?.user || null,
     balance: 0.00,
-    streak: 0,
-    lastCheckin: null,
+    streak: 0,            // jumlah hari yang sudah diclaim
+    lastCheckin: null,    // YYYY-MM-DD terakhir claim
     address: localStorage.getItem("bsc_address") || "",
     refCount: 0,
     refBonus: 0,
@@ -25,6 +25,12 @@
       ad2: { completed: false, reward: 0.02 }
     }
   };
+
+  // ===== Check-in config (9 hari + naik 0.02) =====
+  const CHECKIN_DAYS = 9;
+  const CHECKIN_REWARDS = Array.from({ length: CHECKIN_DAYS }, (_, i) =>
+    Number(((i + 1) * 0.02).toFixed(2))
+  );
 
   // ===== ELEM =====
   const els = {
@@ -90,7 +96,7 @@
     else console.log(`[${title}]`, msg);
   }
 
-  // ====== PERSIST / DATE ======
+  // ===== PERSIST / DATE =====
   function loadPersisted() {
     const s = localStorage.getItem("checkin_state");
     if (s) {
@@ -113,28 +119,33 @@
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
   }
 
-  // ====== HOME: CHECK-IN UI BARU ======
+  // ===== HOME: CHECK-IN (9 hari) =====
   function canClaimToday() {
     const today = todayStr();
-    return state.lastCheckin !== today && state.streak < 7;
+    return state.lastCheckin !== today && state.streak < CHECKIN_DAYS;
   }
 
   function renderCheckinTiles() {
     if (!els.checkinTiles) return;
-    const days = [1,2,3,4,5,6,7];
-    const next = Math.min(state.streak + 1, 7);
+
+    const days = Array.from({ length: CHECKIN_DAYS }, (_, i) => i + 1);
+    const next = Math.min(state.streak + 1, CHECKIN_DAYS);
 
     els.checkinTiles.innerHTML = days.map(d => {
       let cls = "day-tile";
       if (d <= state.streak) cls += " done";
       else if (d === next && canClaimToday()) cls += " current";
       else if (d > next) cls += " locked";
-      return `<div class="${cls}" data-day="${d}">Day ${d}<small>${d*2}</small></div>`;
+
+      const reward = CHECKIN_REWARDS[d - 1].toFixed(2); // tampilkan 0.02 ... 0.18
+      return `<div class="${cls}" data-day="${d}">
+                Day ${d}<small>${reward}</small>
+              </div>`;
     }).join("");
 
     // progress bar
     if (els.checkinProgressBar) {
-      const pct = (state.streak / 7) * 100;
+      const pct = (state.streak / CHECKIN_DAYS) * 100;
       els.checkinProgressBar.style.width = `${pct}%`;
     }
 
@@ -148,16 +159,23 @@
 
   async function claimToday() {
     if (!canClaimToday()) return;
+
+    // reward hari yang akan di-claim (index 0-based)
+    const idx = Math.min(state.streak, CHECKIN_DAYS - 1);
+    const reward = CHECKIN_REWARDS[idx];
+
     state.lastCheckin = todayStr();
-    state.streak = Math.min(7, (state.streak || 0) + 1);
+    state.streak = Math.min(CHECKIN_DAYS, (state.streak || 0) + 1);
     saveCheckin();
     renderCheckinTiles();
-    // (opsional) kasih reward kecil untuk check-in, set ke 0 kalau tak mau
-    setBalance(state.balance + 0);
-    toast("Check-in hari ini berhasil!", "Claimed");
+
+    // tambahkan reward ke saldo (ubah +0 jika tak ingin menambah saldo)
+    setBalance(state.balance + reward);
+
+    toast(`Check-in berhasil! +$${reward.toFixed(2)}`, "Claimed");
   }
 
-  // ====== TASKS (tanpa modal) ======
+  // ===== TASKS (tanpa modal) =====
   function initTasks() {
     document.querySelectorAll(".task-card .btn-cta[data-action='watch']").forEach(btn => {
       btn.addEventListener("click", async () => {
@@ -165,13 +183,13 @@
         if (!taskId) return;
         if (state.tasks[taskId]?.completed) return;
 
-        // Tampilkan iklan Monetag (jika fungsi ada)
+        // Tampilkan iklan Monetag (jika ada)
         try {
           const fn = window[window.MONETAG_FN];
           if (typeof fn === "function") fn();
         } catch {}
 
-        // Langsung verifikasi ke server
+        // Verifikasi ke server
         try {
           const data = await safeFetch(`/api/reward/complete`, {
             method: "POST",
@@ -195,7 +213,7 @@
     });
   }
 
-  // ====== REFERRAL ======
+  // ===== REFERRAL =====
   function setReferralLink() {
     const id = state.user?.id || "guest";
     const link = `https://t.me/${window.BOT_USERNAME}?start=ref_${id}`;
@@ -238,7 +256,7 @@
     } catch {}
   }
 
-  // ====== PROFILE / WITHDRAW / ADDRESS ======
+  // ===== PROFILE / WITHDRAW / ADDRESS =====
   function setProfile() {
     const u = state.user;
     const name = u ? [u.first_name, u.last_name].filter(Boolean).join(" ") : "Guest";
@@ -291,7 +309,7 @@
     });
   }
 
-  // ====== NAV ======
+  // ===== NAV =====
   function setScreen(name) {
     Object.entries(els.screens).forEach(([k, el]) => el?.classList.toggle("active", k === name));
     els.tabs.forEach(tab => tab.classList.toggle("active", tab.dataset.target === name));
@@ -300,10 +318,8 @@
     els.tabs.forEach(tab => tab.addEventListener("click", () => setScreen(tab.dataset.target)));
   }
 
-  // ====== INIT ======
+  // ===== INIT =====
   function init() {
-    // Pemadam kebakaran: kalau ada sisa class modal-open
-    try { document.body.classList.remove("modal-open"); } catch {}
     ensureUser();
     loadPersisted();
     setProfile();
