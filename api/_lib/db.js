@@ -1,58 +1,78 @@
 // api/_lib/db.js
 const { Pool } = require("pg");
 
-// Ambil URL dari env, trimming biar gak ada spasi tak sengaja
-function pickUrl(...names) {
-  for (const n of names) {
-    const v = process.env[n];
-    if (typeof v === "string" && v.trim()) return v.trim();
-  }
-  return null;
+// Ambil connection string dari env (pakai yang ada saja)
+const CONN =
+  process.env.POSTGRES_URL ||
+  process.env.DATABASE_URL ||
+  process.env.POSTGRES_PRISMA_URL;
+
+if (!CONN) {
+  throw new Error("Missing POSTGRES_URL/DATABASE_URL in environment");
 }
 
-const DB_URL = pickUrl(
-  "SUPABASE_DB_URL",        // <-- utamakan ini
-  "DATABASE_URL",
-  "POSTGRES_URL",
-  "POSTGRES_PRISMA_URL",
-  "DATABASE_URL_UNPOOLED"
-);
+// Reuse pool di serverless
+if (!global._dbPool) {
+  global._dbPool = new Pool({
+    connectionString: CONN,
+    max: 5,
+    idleTimeoutMillis: 30000,
+    ssl: { rejectUnauthorized: false },
+  });
+}
+const pool = global._dbPool;
 
-if (!DB_URL) throw new Error("No database URL found. Set SUPABASE_DB_URL in Vercel.");
-
-// PARSE manual agar kita bisa set SSL override dengan pasti
-const u = new URL(DB_URL);
-const pool = new Pool({
-  host: u.hostname,
-  port: Number(u.port || 5432),
-  user: decodeURIComponent(u.username),
-  password: decodeURIComponent(u.password),
-  database: u.pathname.slice(1),
-  max: 1, // aman untuk serverless
-  ssl: { rejectUnauthorized: false }, // <-- kunci: jangan verifikasi cert
-});
-
-// helper: sql`SELECT ... ${x}`
-async function sql(strings, ...values) {
-  const text = strings.raw
-    ? strings.map((s, i) => s + (i < values.length ? `$${i + 1}` : "")).join("")
-    : strings;
-  const params = strings.raw ? values : [];
-  const { rows } = await pool.query(text, params);
-  return { rows };
+// Helper query
+async function query(text, params) {
+  const res = await pool.query(text, params);
+  return res;
 }
 
-// tambah saldo + catat ke ledger
-async function addBalance(userId, amount, reason = "manual", refId = null) {
-  await pool.query(
-    "INSERT INTO ledger (user_id, amount, reason, ref_id) VALUES ($1,$2,$3,$4)",
-    [userId, amount, reason, refId]
+// Tagged template: sql`SELECT ... WHERE id=${x}`
+function sql(strings, ...values) {
+  const text = strings.reduce(
+    (acc, s, i) => acc + s + (i < values.length ? `$${i + 1}` : ""),
+    ""
   );
-  const q = await pool.query(
-    "UPDATE users SET balance = balance + $1::numeric, updated_at=now() WHERE id=$2 RETURNING balance",
-    [amount, userId]
-  );
-  return Number(q.rows[0].balance);
+  return query(text, values);
 }
 
-module.exports = { sql, addBalance };
+// === Public APIs yang dipakai modul lain ===
+
+// Buat user kalau belum ada, update field dasar kalau ada
+async function getUserOrCreate(tgUser = {}) {
+  const id = tgUser.id;
+  const username = tgUser.username || null;
+  const first = tgUser.first_name || null;
+  const last = tgUser.last_name || null;
+
+  if (!id) throw new Error("TG user id missing");
+
+  await sql`
+    INSERT INTO users (id, username, first_name, last_name)
+    VALUES (${id}, ${username}, ${first}, ${last})
+    ON CONFLICT (id) DO UPDATE SET
+      username   = COALESCE(EXCLUDED.username, users.username),
+      first_name = COALESCE(EXCLUDED.first_name, users.first_name),
+      last_name  = COALESCE(EXCLUDED.last_name, users.last_name),
+      updated_at = now()
+  `;
+
+  const { rows } = await sql`SELECT * FROM users WHERE id=${id} LIMIT 1`;
+  return rows[0];
+}
+
+// Tambah saldo + catat ledger
+async function addBalance(userId, amount, meta = {}) {
+  await sql`
+    INSERT INTO ledger (user_id, amount, type, meta)
+    VALUES (${userId}, ${amount}::numeric, 'credit', ${JSON.stringify(meta)}::jsonb)
+  `;
+  await sql`
+    UPDATE users SET balance = balance + ${amount}::numeric, updated_at=now()
+    WHERE id=${userId}
+  `;
+  return true;
+}
+
+module.exports = { sql, getUserOrCreate, addBalance };
