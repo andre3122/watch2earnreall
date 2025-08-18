@@ -1,5 +1,8 @@
-const { sql } = require("../_lib/db");
-const { authFromHeader } = require("../_lib/auth");
+const { sql } = require("./_lib/db");          // <— tadinya ../_lib/db
+const { authFromHeader } = require("./_lib/auth"); // <— tadinya ../_lib/auth
+
+// ...
+const count = (countRows[0] && countRows[0].cnt) || 0; // <— tanpa ?.
 - const { sql } = require("../_lib/db");
 - const { authFromHeader } = require("../_lib/auth");
 + const { sql } = require("./_lib/db");
