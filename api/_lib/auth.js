@@ -1,17 +1,35 @@
-api/
-  _lib/
-    auth.js          ← auth helper (yang kamu tanya)
-    telegram.js
-    db.js
-  setup/
-    migrate.js
-  user/
-    get.js
-  checkin/
-    claim.js
-  reward/
-    complete.js
-  referrals.js
-  address/
-    save.js
-  withdraw.js
+// api/_lib/auth.js — Telegram Mini App auth (dengan dev fallback)
+const { validateInitData } = require("./telegram");
+const { getUserOrCreate } = require("./db");
+
+async function authFromHeader(req) {
+  try {
+    const raw = req.headers["x-telegram-init-data"] || "";
+    const botToken = process.env.BOT_TOKEN;
+
+    // Dev/testing fallback (buat test di browser biasa)
+    if (!raw) {
+      const test = req.headers["x-telegram-test-user"];
+      if (test) {
+        let tgUser; try { tgUser = JSON.parse(test); } catch {}
+        if (!tgUser?.id) return { ok:false, status:401, error:"BAD_TEST_HEADER" };
+        const user = await getUserOrCreate(tgUser);
+        return { ok:true, user, tgUser };
+      }
+      return { ok:false, status:401, error:"NO_INITDATA" };
+    }
+
+    if (!botToken) return { ok:false, status:500, error:"NO_BOT_TOKEN" };
+    const v = validateInitData(raw, botToken, 24*3600);
+    if (!v.ok) return { ok:false, status:401, error:v.error || "BAD_INITDATA" };
+
+    const tgUser = v.data.user;
+    const user = await getUserOrCreate(tgUser);
+    return { ok:true, user, tgUser };
+  } catch (e) {
+    console.error("authFromHeader crash:", e);
+    return { ok:false, status:500, error:"AUTH_CRASH" };
+  }
+}
+
+module.exports = { authFromHeader };
