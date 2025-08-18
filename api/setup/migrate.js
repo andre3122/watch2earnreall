@@ -1,66 +1,75 @@
-// /api/setup/migrate.js
+// api/setup/migrate.js — run once to create tables in the *actual* DATABASE_URL used by the app
 const { sql } = require("../_lib/db");
 
+const MIGRATION = `
+create extension if not exists "uuid-ossp";
+
+create table if not exists users (
+  id           bigint primary key,
+  username     text,
+  first_name   text,
+  last_name    text,
+  balance      numeric not null default 0,
+  streak       int not null default 0,
+  last_checkin timestamptz,
+  address      text,
+  created_at   timestamptz not null default now(),
+  updated_at   timestamptz not null default now()
+);
+create index if not exists idx_users_updated_at on users(updated_at);
+
+create table if not exists ledger (
+  id         bigserial primary key,
+  user_id    bigint not null references users(id) on delete cascade,
+  amount     numeric not null,
+  reason     text not null,
+  ref_id     text,
+  created_at timestamptz not null default now()
+);
+create index if not exists idx_ledger_user on ledger(user_id);
+
+create table if not exists ad_sessions (
+  id           bigserial primary key,
+  user_id      bigint not null references users(id) on delete cascade,
+  task_id      text not null,
+  token        text not null unique,
+  reward       numeric not null default 0,
+  status       text not null default 'pending',
+  created_at   timestamptz not null default now(),
+  completed_at timestamptz
+);
+create index if not exists idx_ad_sessions_user on ad_sessions(user_id);
+create index if not exists idx_ad_sessions_status on ad_sessions(status);
+
+create table if not exists withdrawals (
+  id         bigserial primary key,
+  user_id    bigint not null references users(id) on delete cascade,
+  amount     numeric not null,
+  address    text not null,
+  status     text not null default 'pending',
+  created_at timestamptz not null default now()
+);
+create index if not exists idx_withdrawals_user on withdrawals(user_id);
+
+create or replace function touch_users_updated_at()
+returns trigger as $$
+begin
+  new.updated_at := now();
+  return new;
+end;
+$$ language plpgsql;
+
+drop trigger if exists trg_users_updated on users;
+create trigger trg_users_updated before update on users
+for each row execute function touch_users_updated_at();
+`;
+
 module.exports = async (req, res) => {
-  if (req.method !== "GET") return res.status(405).json({ ok: false, error: "METHOD_NOT_ALLOWED" });
-
   try {
-    // Users (kalau sudah ada di file kamu, bagian ini boleh dibiarkan / digabung)
-    await sql`
-      CREATE TABLE IF NOT EXISTS users (
-        id BIGINT PRIMARY KEY,
-        username TEXT,
-        first_name TEXT,
-        last_name TEXT,
-        balance NUMERIC NOT NULL DEFAULT 0,
-        streak INT NOT NULL DEFAULT 0,
-        last_checkin DATE,
-        address TEXT,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-        updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-      )`;
-
-    // Referrals (opsional, kalau kamu sudah punya, boleh hapus bagian ini)
-    await sql`
-      CREATE TABLE IF NOT EXISTS referrals (
-        id BIGSERIAL PRIMARY KEY,
-        referrer_id BIGINT NOT NULL,
-        referred_id BIGINT NOT NULL UNIQUE,
-        bonus NUMERIC NOT NULL DEFAULT 0,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-      )`;
-
-    // ⬇️ BAGIAN YANG DITANYAKAN — ad_sessions untuk verifikasi iklan/postback
-    await sql`
-      CREATE TABLE IF NOT EXISTS ad_sessions (
-        id BIGSERIAL PRIMARY KEY,
-        user_id BIGINT NOT NULL,
-        task_id TEXT NOT NULL,
-        token TEXT UNIQUE NOT NULL,
-        reward NUMERIC NOT NULL,
-        status TEXT NOT NULL DEFAULT 'pending',  -- pending | credited | rejected
-        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-        completed_at TIMESTAMPTZ
-      )`;
-
-    await sql`
-      CREATE INDEX IF NOT EXISTS ad_sessions_user_status_idx
-      ON ad_sessions (user_id, status)`;
-
-    // Withdraws (opsional, kalau sudah ada di file kamu, boleh hapus bagian ini)
-    await sql`
-      CREATE TABLE IF NOT EXISTS withdrawals (
-        id BIGSERIAL PRIMARY KEY,
-        user_id BIGINT NOT NULL,
-        amount NUMERIC NOT NULL,
-        address TEXT NOT NULL,
-        status TEXT NOT NULL DEFAULT 'pending', -- pending | approved | rejected | paid
-        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-      )`;
-
-    return res.status(200).json({ ok: true });
+    await sql.raw ? sql.raw(MIGRATION) : sql([MIGRATION], []); // support helper apapun
+    res.json({ ok: true });
   } catch (e) {
-    console.error(e);
-    return res.status(500).json({ ok: false, error: e.message });
+    console.error("migrate error:", e);
+    res.status(500).json({ ok:false, error: String(e) });
   }
 };
