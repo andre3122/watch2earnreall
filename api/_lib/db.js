@@ -1,26 +1,38 @@
 // api/_lib/db.js
 const { Pool } = require("pg");
 
-// PRIORITAS URL DB: pakai punyamu sendiri dulu
-const DB_URL =
-  process.env.SUPABASE_DB_URL ||         // <-- set ini di Vercel
-  process.env.DATABASE_URL ||            // fallback
-  process.env.POSTGRES_URL ||
-  process.env.POSTGRES_PRISMA_URL ||
-  process.env.DATABASE_URL_UNPOOLED;
-
-if (!DB_URL) {
-  throw new Error("No database URL found. Set SUPABASE_DB_URL in Vercel.");
+// Ambil URL dari env, trimming biar gak ada spasi tak sengaja
+function pickUrl(...names) {
+  for (const n of names) {
+    const v = process.env[n];
+    if (typeof v === "string" && v.trim()) return v.trim();
+  }
+  return null;
 }
 
-// Pool aman untuk serverless + pgbouncer
+const DB_URL = pickUrl(
+  "SUPABASE_DB_URL",        // <-- utamakan ini
+  "DATABASE_URL",
+  "POSTGRES_URL",
+  "POSTGRES_PRISMA_URL",
+  "DATABASE_URL_UNPOOLED"
+);
+
+if (!DB_URL) throw new Error("No database URL found. Set SUPABASE_DB_URL in Vercel.");
+
+// PARSE manual agar kita bisa set SSL override dengan pasti
+const u = new URL(DB_URL);
 const pool = new Pool({
-  connectionString: DB_URL,
-  max: 1,
-  ssl: { rejectUnauthorized: false },
+  host: u.hostname,
+  port: Number(u.port || 5432),
+  user: decodeURIComponent(u.username),
+  password: decodeURIComponent(u.password),
+  database: u.pathname.slice(1),
+  max: 1, // aman untuk serverless
+  ssl: { rejectUnauthorized: false }, // <-- kunci: jangan verifikasi cert
 });
 
-// Helper template literal: sql`SELECT ... ${x}`
+// helper: sql`SELECT ... ${x}`
 async function sql(strings, ...values) {
   const text = strings.raw
     ? strings.map((s, i) => s + (i < values.length ? `$${i + 1}` : "")).join("")
@@ -30,7 +42,7 @@ async function sql(strings, ...values) {
   return { rows };
 }
 
-// Kredit/debit saldo + catat ke ledger
+// tambah saldo + catat ke ledger
 async function addBalance(userId, amount, reason = "manual", refId = null) {
   await pool.query(
     "INSERT INTO ledger (user_id, amount, reason, ref_id) VALUES ($1,$2,$3,$4)",
