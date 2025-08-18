@@ -1,10 +1,6 @@
 // api/withdraw.js
 const { sql } = require("../_lib/db");
 const { authFromHeader } = require("../_lib/auth");
-- const { sql } = require("../_lib/db");
-- const { authFromHeader } = require("../_lib/auth");
-+ const { sql } = require("./_lib/db");
-+ const { authFromHeader } = require("./_lib/auth");
 
 module.exports = async (req, res) => {
   if (req.method !== "POST") return res.status(405).json({ ok:false, error:"METHOD" });
