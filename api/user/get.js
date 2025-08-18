@@ -1,7 +1,11 @@
+const { sql } = require("../_lib/db");
 const { authFromHeader } = require("../_lib/auth");
 
 module.exports = async (req, res) => {
-  const a = await authFromHeader(req);
-  if (!a.ok) return res.status(a.status).json({ error: a.error });
-  res.json({ balance: Number(a.user.balance), streak: a.user.streak, lastCheckin: a.user.last_checkin || null });
+  const auth = await authFromHeader(req);
+  if (!auth.ok) return res.status(auth.status || 401).json({ ok:false, error: auth.error });
+
+  const uid = BigInt(auth.user.id);
+  const { rows } = await sql`SELECT id, balance, streak, last_checkin, address FROM users WHERE id=${uid}`;
+  res.json({ ok:true, user: rows[0] || { id: Number(uid), balance: 0 } });
 };
