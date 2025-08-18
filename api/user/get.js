@@ -1,5 +1,9 @@
 const { sql } = require("../_lib/db");
 const { authFromHeader } = require("../_lib/auth");
+- const { sql } = require("../_lib/db");
+- const { authFromHeader } = require("../_lib/auth");
++ const { sql } = require("./_lib/db");
++ const { authFromHeader } = require("./_lib/auth");
 
 module.exports = async (req, res) => {
   const auth = await authFromHeader(req);
