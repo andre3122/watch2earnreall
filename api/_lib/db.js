@@ -1,5 +1,20 @@
-const { sql } = require("@vercel/postgres");
+// api/_lib/db.js — Supabase (pgbouncer) via 'pg' with tiny sql`` helper
+const { Pool } = require('pg');
 
+// Gunakan Supabase pooled connection (port 6543) + pgbouncer params:
+// postgresql://postgres:<PASSWORD>@<HOST>.supabase.co:6543/postgres?pgbouncer=true&connection_limit=1&sslmode=require
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false }
+});
+
+// Template tag sederhana mirip `sql` dari @vercel/postgres
+function sql(strings, ...values) {
+  const text = strings.reduce((acc, s, i) => acc + s + (i < values.length ? `$${i + 1}` : ''), '');
+  return pool.query(text, values);
+}
+
+// === Helpers dengan signature sama seperti sebelumnya ===
 async function getUserOrCreate(tgUser) {
   const id = BigInt(tgUser.id);
   const username = tgUser.username || null;
@@ -13,7 +28,7 @@ async function getUserOrCreate(tgUser) {
       username = EXCLUDED.username,
       first_name = EXCLUDED.first_name,
       last_name = EXCLUDED.last_name,
-      updated_at = now();
+      updated_at = now()
   `;
 
   const { rows } = await sql`SELECT id, balance, streak, last_checkin::text, address FROM users WHERE id=${id}`;
@@ -22,11 +37,13 @@ async function getUserOrCreate(tgUser) {
 
 async function addBalance(userId, amount) {
   const { rows } = await sql`
-    UPDATE users SET balance = balance + ${amount}::numeric, updated_at = now()
+    UPDATE users
+    SET balance = balance + ${amount}::numeric, updated_at = now()
     WHERE id = ${userId}
     RETURNING balance;
   `;
-  return rows[0]?.balance || 0;
+  const val = rows[0]?.balance;
+  return typeof val === 'string' ? Number(val) : Number(val || 0);
 }
 
 module.exports = { sql, getUserOrCreate, addBalance };
