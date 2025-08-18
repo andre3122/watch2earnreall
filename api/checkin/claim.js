@@ -1,29 +1,23 @@
-const { sql, addBalance } = require("../_lib/db");
+// api/checkin/claim.js
+const { sql } = require("../_lib/db");
 const { authFromHeader } = require("../_lib/auth");
 
 module.exports = async (req, res) => {
-  if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
+  if (req.method !== "POST") return res.status(405).json({ ok:false, error:"METHOD" });
   const a = await authFromHeader(req);
-  if (!a.ok) return res.status(a.status).json({ error: a.error });
+  if (!a.ok) return res.status(a.status || 401).json({ ok:false, error:a.error });
 
-  const uid = a.user.id;
-  const today = new Date().toISOString().slice(0,10);
+  const uid = BigInt(a.user.id);
+  // kredit hanya kalau sudah ada ad_session 'checkin:<day>' yg status=credited (postback)
+  const { rows: s } = await sql`
+    SELECT reward FROM ad_sessions
+    WHERE user_id=${uid} AND task_id LIKE 'checkin:%' AND status='credited'
+    ORDER BY completed_at DESC NULLS LAST
+    LIMIT 1
+  `;
+  if (!s.length) return res.status(400).json({ ok:false, error:"WAITING_POSTBACK" });
 
-  // already checked today?
-  const { rows: exists } = await sql`SELECT 1 FROM checkins WHERE user_id=${uid} AND date=${today}::date`;
-  if (exists.length) return res.status(400).json({ error: "ALREADY_CHECKED" });
-
-  // get current streak
-  const { rows: urows } = await sql`SELECT streak FROM users WHERE id=${uid}`;
-  const streak = urows[0]?.streak ?? 0;
-  if (streak >= 9) return res.status(400).json({ error: "MAX_STREAK" });
-
-  const nextDay = Math.min(streak + 1, 9);
-  const amount = Number((nextDay * 0.02).toFixed(2));
-
-  await sql`INSERT INTO checkins (user_id, date, amount) VALUES (${uid}, ${today}, ${amount})`;
-  await sql`UPDATE users SET streak=${nextDay}, last_checkin=${today}::date, updated_at=now() WHERE id=${uid}`;
-  const balance = await addBalance(uid, amount);
-
-  res.json({ ok: true, amount, streak: nextDay, lastCheckin: today, balance: Number(balance) });
+  // responkan saldo terbaru
+  const { rows: u } = await sql`SELECT balance, streak, last_checkin FROM users WHERE id=${uid}`;
+  return res.json({ ok:true, balance: Number(u?.[0]?.balance || 0), streak: u?.[0]?.streak || 0, lastCheckin: u?.[0]?.last_checkin || null });
 };
