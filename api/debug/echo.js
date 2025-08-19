@@ -1,35 +1,58 @@
-// api/debug/echo.js  (satu function untuk echo, auth, tables)
-const { authFromHeader } = require("../_lib/auth");
+// /api/debug/echo.js
 const { sql } = require("../_lib/db");
 
 module.exports = async (req, res) => {
   try {
-    const url = new URL(req.url, "http://x");
-    const action = (url.searchParams.get("action") || "echo").toLowerCase();
-
-    if (action === "echo") {
-      return res.json({
-        got_test_header: !!req.headers["x-telegram-test-user"],
-        header_value: req.headers["x-telegram-test-user"] || null,
-      });
-    }
-
-    if (action === "auth") {
-      const a = await authFromHeader(req);
-      return res.status(a.status || 200).json(a);
-    }
+    const action = String(req.query.action || "echo");
 
     if (action === "tables") {
       const { rows } = await sql`
-        SELECT table_name FROM information_schema.tables
-        WHERE table_schema='public' ORDER BY 1
+        SELECT table_name
+        FROM information_schema.tables
+        WHERE table_schema = 'public'
+        ORDER BY table_name
       `;
       return res.json(rows.map(r => r.table_name));
     }
 
-    return res.status(400).json({ error: "Unknown action" });
+    if (action === "dbinfo") {
+      const { rows } = await sql`
+        SELECT current_database() AS db,
+               inet_server_addr() AS host,
+               inet_server_port() AS port,
+               current_user AS user,
+               version() AS version
+      `;
+      return res.json(rows[0]);
+    }
+
+    if (action === "fix-ledger") {
+      // pastikan kolom balance di users ada
+      await sql`ALTER TABLE public.users
+                  ADD COLUMN IF NOT EXISTS balance numeric NOT NULL DEFAULT 0,
+                  ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now()`;
+
+      // buat tabel ledger jika belum ada
+      await sql`CREATE TABLE IF NOT EXISTS public.ledger (
+                  id         bigserial PRIMARY KEY,
+                  user_id    bigint NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+                  amount     numeric NOT NULL,
+                  kind       text,
+                  ref        text,
+                  note       text,
+                  created_at timestamptz NOT NULL DEFAULT now()
+                )`;
+
+      await sql`CREATE INDEX IF NOT EXISTS idx_ledger_user_created
+                ON public.ledger (user_id, created_at DESC)`;
+
+      return res.json({ ok: true, message: "ledger ensured" });
+    }
+
+    // default echo
+    return res.json({ ok: true, action, header_value: req.headers["x-telegram-test-user"] || null });
   } catch (e) {
-    console.error("debug error:", e);
-    return res.status(500).json({ error: "debug_failed" });
+    console.error("debug/echo crash:", e);
+    return res.status(500).json({ ok: false, error: String(e.message || e) });
   }
 };
