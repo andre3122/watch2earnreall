@@ -1,4 +1,4 @@
-// api/_lib/auth.js — Telegram auth (strict + optional permissive)
+// api/_lib/auth.js — Telegram auth (strict by default + permissive optional)
 const { validateInitData, parseInitData } = require("./telegram");
 const { getUserOrCreate } = require("./db");
 
@@ -7,7 +7,7 @@ async function authFromHeader(req) {
   const raw = req.headers["x-telegram-init-data"] || "";
   const botToken = process.env.BOT_TOKEN;
 
-  // 1) Ada initData dari Telegram WebApp
+  // 1) Kalau ada initData dari Telegram
   if (raw) {
     if (typeof validateInitData === "function" && botToken) {
       const v = validateInitData(raw, botToken, 24 * 3600);
@@ -16,7 +16,7 @@ async function authFromHeader(req) {
         return { ok: true, user, tgUser: v.data.user, source: "initData:strict" };
       }
     }
-    // Fallback permissive: terima user tanpa verifikasi hash
+    // fallback permissive (kalau di-enable)
     if (PERMISSIVE) {
       const tgUser = parseInitData(raw)?.user;
       if (tgUser?.id) {
@@ -26,7 +26,7 @@ async function authFromHeader(req) {
     }
   }
 
-  // 2) Mode dev: header x-telegram-test-user
+  // 2) Development header
   const test = req.headers["x-telegram-test-user"];
   if (test) {
     try {
@@ -38,7 +38,7 @@ async function authFromHeader(req) {
     } catch {}
   }
 
-  // 3) Fallback permissive terakhir: guest by IP
+  // 3) Permissive terakhir: guest by IP (kalau di-enable)
   if (PERMISSIVE) {
     const ip = (req.headers["x-forwarded-for"] || req.socket?.remoteAddress || "0.0.0.0").split(",")[0].trim();
     const fakeId = Math.abs(ip.split(".").reduce((a, b) => (a * 131 + (+b || 0)) | 0, 7)) + 1000000000;
