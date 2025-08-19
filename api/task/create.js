@@ -3,7 +3,7 @@ const crypto = require("crypto");
 const { sql } = require("../_lib/db");
 const { authFromHeader } = require("../_lib/auth");
 
-// ==> Reward per task iklan
+// Reward per task
 const TASKS = { ad1: 0.01, ad2: 0.01 };
 
 module.exports = async (req, res) => {
@@ -12,7 +12,6 @@ module.exports = async (req, res) => {
   const { ok, status, user } = await authFromHeader(req);
   if (!ok || !user) return res.status(status || 401).json({ ok:false, error:"AUTH_FAILED" });
 
-  // robust body parse
   let body = {};
   try { body = typeof req.body === "string" ? JSON.parse(req.body) : (req.body || {}); } catch {}
   const { task_id } = body || {};
@@ -22,7 +21,7 @@ module.exports = async (req, res) => {
 
   const token = crypto.randomBytes(16).toString("hex");
 
-  // opsional: link iklan (tidak wajib untuk server-timer)
+  // opsional: link iklan
   const base = process.env.MONETAG_AD_URL || "";
   const param = process.env.MONETAG_TOKEN_PARAM || "subid";
   const adUrl = base
