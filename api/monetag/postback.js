@@ -1,36 +1,31 @@
-// api/monetag/postback.js — Monetag postback
-const { sql } = require("../_lib/db");
+// api/monetag/postback.js
+const { sql, addBalance } = require('../_lib/db');
 
 module.exports = async (req, res) => {
   try {
-    const param = process.env.MONETAG_TOKEN_PARAM || "subid";
-    const token = (req.query?.[param] || "").toString().trim();
-    if (!token) return res.status(400).send("missing-token");
-
-    const rewardFlag = String(req.query?.reward || "").toLowerCase();
-    if (rewardFlag && rewardFlag !== "valued") return res.status(200).send("ignored");
+    const subid = (req.query.subid || req.query.sub_id || req.query.token || "").toString();
+    if (!subid) return res.status(400).json({ error:"NO_TOKEN" });
 
     const { rows } = await sql`
-      SELECT id, user_id, reward, status
-      FROM ad_sessions
-      WHERE token = ${token}
-      LIMIT 1
-    `;
-    if (rows.length === 0) return res.status(404).send("unknown-session");
+      UPDATE ad_sessions
+      SET status='credited'
+      WHERE token=${subid} AND status='await_postback'
+      RETURNING user_id, reward, task_id`;
 
-    const s = rows[0];
-    if (s.status === "credited") return res.status(200).send("ok");
+    if (!rows.length) return res.status(404).json({ error:"NO_SESSION" });
 
-    await sql`INSERT INTO ledger (user_id, amount, reason, ref_id)
-              VALUES (${s.user_id}, ${s.reward}, 'ad_complete', ${token})`;
-    await sql`UPDATE users SET balance = balance + ${s.reward}::numeric, updated_at = now()
-              WHERE id = ${s.user_id}`;
-    await sql`UPDATE ad_sessions SET status = 'credited', completed_at = now()
-              WHERE id = ${s.id}`;
+    const row = rows[0];
+    await addBalance(row.user_id, Number(row.reward), { task_id: row.task_id }, 'monetag', row.task_id);
 
-    res.status(200).send("ok");
+    // For checkins, update streak/last_checkin
+    if (row.task_id && row.task_id.startsWith('checkin:')) {
+      const d = new Date();
+      const today = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+      await sql`UPDATE users SET streak = LEAST(COALESCE(streak,0)+1, 9), last_checkin=${today} WHERE id=${row.user_id}`;
+      await sql`INSERT INTO checkins (user_id, day, amount) VALUES (${row.user_id}, ${Number(row.task_id.split(':')[1]||1)}, ${row.reward})`;
+    }
+    res.status(200).json({ ok:true });
   } catch (e) {
-    console.error("postback error:", e);
-    res.status(500).send("error-postback");
+    res.status(500).json({ error:"postback error", detail: e.message });
   }
 };
