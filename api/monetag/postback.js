@@ -1,31 +1,48 @@
 // api/monetag/postback.js
-const { sql, addBalance } = require('../_lib/db');
+const { sql } = require("../_lib/db");
 
 module.exports = async (req, res) => {
-  try {
-    const subid = (req.query.subid || req.query.sub_id || req.query.token || "").toString();
-    if (!subid) return res.status(400).json({ error:"NO_TOKEN" });
+  if (req.method !== "GET") {
+    return res.status(405).json({ ok: false, error: "METHOD_NOT_ALLOWED" });
+  }
 
+  // Monetag bisa kirim subid/sub_id/sub1/click_id — ambil apa pun yang ada
+  const q = req.query || {};
+  const token =
+    q.subid || q.sub_id || q.sub1 || q.click_id || q.token || q.t || "";
+
+  if (!token) {
+    return res
+      .status(400)
+      .json({ ok: false, error: "BAD_REQUEST", reason: "NO_TOKEN" });
+  }
+
+  try {
+    // Ambil sesi iklan yang sedang menunggu postback
     const { rows } = await sql`
       UPDATE ad_sessions
-      SET status='credited'
-      WHERE token=${subid} AND status='await_postback'
-      RETURNING user_id, reward, task_id`;
+      SET status = 'verified'
+      WHERE token = ${token}
+        AND status IN ('await_postback','pending')
+      RETURNING user_id, task_id, reward
+    `;
 
-    if (!rows.length) return res.status(404).json({ error:"NO_SESSION" });
-
-    const row = rows[0];
-    await addBalance(row.user_id, Number(row.reward), { task_id: row.task_id }, 'monetag', row.task_id);
-
-    // For checkins, update streak/last_checkin
-    if (row.task_id && row.task_id.startsWith('checkin:')) {
-      const d = new Date();
-      const today = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
-      await sql`UPDATE users SET streak = LEAST(COALESCE(streak,0)+1, 9), last_checkin=${today} WHERE id=${row.user_id}`;
-      await sql`INSERT INTO checkins (user_id, day, amount) VALUES (${row.user_id}, ${Number(row.task_id.split(':')[1]||1)}, ${row.reward})`;
+    if (!rows.length) {
+      // Tidak apa2, jangan 500 — cukup info tidak ada session yg cocok
+      return res.status(200).json({ ok: false, reason: "NO_SESSION" });
     }
-    res.status(200).json({ ok:true });
+
+    const s = rows[0];
+
+    // Catat reward ke tabel task_completions (bukan "ledger" lagi)
+    await sql`
+      INSERT INTO task_completions (user_id, task_id, amount)
+      VALUES (${s.user_id}, ${s.task_id}, ${s.reward}::numeric)
+    `;
+
+    return res.status(200).json({ ok: true });
   } catch (e) {
-    res.status(500).json({ error:"postback error", detail: e.message });
+    console.error("postback error:", e);
+    return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
   }
 };
