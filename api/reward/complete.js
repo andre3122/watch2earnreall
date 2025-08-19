@@ -19,9 +19,7 @@ module.exports = async (req, res) => {
   const { task_id, token } = body || {};
   if (!task_id) return res.status(400).json({ ok:false, error:"BAD_INPUT" });
 
-  // Ambil sesi:
-  // - Kalau token ada → cari sesi berdasarkan token
-  // - Kalau token kosong → ambil sesi paling baru milik user & task_id dengan status pending/await_postback
+  // Ambil sesi (prefer token kalau ada)
   let rows;
   if (token) {
     rows = await sql`
@@ -57,7 +55,7 @@ module.exports = async (req, res) => {
     return res.json({ ok:true, awaiting:true, wait_seconds: MIN_SECONDS - sec });
   }
 
-  // kredit
+  // kredit user
   await sql`
     INSERT INTO ledger (user_id, amount, reason, ref_id)
     VALUES (${user.id}, ${s.reward}::numeric, 'ad_complete', ${token || String(s.id)})
