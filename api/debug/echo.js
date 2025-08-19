@@ -27,12 +27,10 @@ module.exports = async (req, res) => {
     }
 
     if (action === "fix-ledger") {
-      // pastikan kolom balance di users ada
       await sql`ALTER TABLE public.users
                   ADD COLUMN IF NOT EXISTS balance numeric NOT NULL DEFAULT 0,
                   ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now()`;
 
-      // buat tabel ledger jika belum ada
       await sql`CREATE TABLE IF NOT EXISTS public.ledger (
                   id         bigserial PRIMARY KEY,
                   user_id    bigint NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
@@ -49,7 +47,7 @@ module.exports = async (req, res) => {
       return res.json({ ok: true, message: "ledger ensured" });
     }
 
-    // default echo
+    // default
     return res.json({ ok: true, action, header_value: req.headers["x-telegram-test-user"] || null });
   } catch (e) {
     console.error("debug/echo crash:", e);
