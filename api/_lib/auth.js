@@ -1,36 +1,45 @@
-// api/_lib/auth.js
-const { getUserOrCreate } = require('./db');
-const { parseInitData } = require('./telegram');
+// api/_lib/auth.js — Telegram Mini App auth (dengan dev fallback)
+const { validateInitData } = require("./telegram");
+const { getUserOrCreate } = require("./db");
 
 async function authFromHeader(req) {
   try {
-    // Test header path
-    const testHeader = req.headers['x-telegram-test-user'];
-    if (testHeader) {
-      let user;
-      if (typeof testHeader === 'string') {
-        try { user = JSON.parse(testHeader); } catch {}
+    const raw = req.headers["x-telegram-init-data"] || "";
+    const botToken = process.env.BOT_TOKEN;
+
+    // Dev/testing fallback (browser biasa): pakai header x-telegram-test-user
+    if (!raw) {
+      const test = req.headers["x-telegram-test-user"];
+      if (test) {
+        let tgUser; try { tgUser = JSON.parse(test); } catch {}
+        if (!tgUser?.id) return { ok:false, status:401, error:"BAD_TEST_HEADER" };
+        const user = await getUserOrCreate(tgUser);
+        return { ok:true, user, tgUser };
       }
-      if (!user && typeof testHeader === 'object') user = testHeader;
-      if (user && user.id) {
-        const u = await getUserOrCreate({ id: String(user.id), username: user.username || null });
-        return { ok: true, user: u };
-      }
+      return { ok:false, status:401, error:"NO_INITDATA" };
     }
 
-    // Real Telegram init data
-    const init = req.headers['x-telegram-init-data'];
-    if (init) {
-      const parsed = parseInitData(init);
-      if (parsed && parsed.user && parsed.user.id) {
-        const u = await getUserOrCreate({ id: String(parsed.user.id), username: parsed.user.username || null });
-        return { ok: true, user: u };
+    if (!botToken) return { ok:false, status:500, error:"NO_BOT_TOKEN" };
+
+    const v = validateInitData(raw, botToken, 24*3600);
+    if (!v.ok) {
+      // optional fallback untuk dev: izinkan test header jika initData invalid
+      if (String(process.env.ALLOW_TEST_HEADER_WHEN_BAD_INITDATA||"") === "1") {
+        const test = req.headers["x-telegram-test-user"]; 
+        if (test) {
+          let tgUser; try { tgUser = JSON.parse(test); } catch {}
+          if (tgUser?.id) { const user = await getUserOrCreate(tgUser); return { ok:true, user, tgUser }; }
+        }
       }
-      return { ok: false, status: 401, error: 'AUTH_CRASH' };
+      return { ok:false, status:401, error: v.error || "BAD_INITDATA" };
     }
-    return { ok: false, status: 401, error: 'AUTH_FAILED' };
+
+    const tgUser = v.data.user;
+    const user = await getUserOrCreate(tgUser);
+    return { ok:true, user, tgUser };
   } catch (e) {
-    return { ok: false, status: 500, error: 'AUTH_CRASH' };
+    console.error("authFromHeader crash:", e);
+    return { ok:false, status:500, error:"AUTH_CRASH" };
   }
 }
 
