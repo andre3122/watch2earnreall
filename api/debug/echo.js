@@ -28,29 +28,29 @@ module.exports = async (req, res) => {
 
     if (action === "fix-ledger") {
       await sql`ALTER TABLE public.users
-                  ADD COLUMN IF NOT EXISTS balance numeric NOT NULL DEFAULT 0,
-                  ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now()`;
+        ADD COLUMN IF NOT EXISTS balance numeric NOT NULL DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now()`;
 
       await sql`CREATE TABLE IF NOT EXISTS public.ledger (
-                  id         bigserial PRIMARY KEY,
-                  user_id    bigint NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
-                  amount     numeric NOT NULL,
-                  kind       text,
-                  ref        text,
-                  note       text,
-                  created_at timestamptz NOT NULL DEFAULT now()
-                )`;
+        id bigserial PRIMARY KEY,
+        user_id bigint NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+        amount numeric NOT NULL,
+        kind text,
+        ref text,
+        note text,
+        created_at timestamptz NOT NULL DEFAULT now()
+      )`;
 
       await sql`CREATE INDEX IF NOT EXISTS idx_ledger_user_created
-                ON public.ledger (user_id, created_at DESC)`;
+        ON public.ledger (user_id, created_at DESC)`;
 
       return res.json({ ok: true, message: "ledger ensured" });
     }
 
-    // default
+    // default biar gak 400 kalau lupa param
     return res.json({ ok: true, action, header_value: req.headers["x-telegram-test-user"] || null });
   } catch (e) {
     console.error("debug/echo crash:", e);
-    return res.status(500).json({ ok: false, error: String(e.message || e) });
+    return res.status(500).json({ ok:false, error:String(e.message||e) });
   }
 };
