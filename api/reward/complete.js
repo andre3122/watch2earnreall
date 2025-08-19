@@ -1,72 +1,92 @@
-// api/reward/complete.js — server-timer credit (robust + fallback)
+// api/reward/complete.js — server-timer (no postback), interval FIXED
 const { sql } = require("../_lib/db");
 const { authFromHeader } = require("../_lib/auth");
 
 const MIN_SECONDS = Number(process.env.TASK_MIN_SECONDS || 16);
-const SESSION_GRACE_SEC = 600; // 10 menit: fallback cari sesi terakhir jika token tidak cocok
+const SESSION_GRACE_SEC = 600;              // cari sesi ≤ 10 menit terakhir
+const CREDIT_FORCE = String(process.env.CREDIT_FORCE || "0") === "1";
+const TASKS = { ad1: 0.01, ad2: 0.01 };     // samakan dengan task/create
 
 module.exports = async (req, res) => {
-  if (req.method !== "POST")
-    return res.status(405).json({ ok:false, error:"METHOD_NOT_ALLOWED" });
+  try {
+    if (req.method !== "POST") return res.status(405).json({ ok:false, error:"METHOD_NOT_ALLOWED" });
 
-  const { ok, status, user } = await authFromHeader(req);
-  if (!ok || !user)
-    return res.status(status || 401).json({ ok:false, error:"AUTH_FAILED" });
+    const { ok, status, user } = await authFromHeader(req);
+    if (!ok || !user) return res.status(status || 401).json({ ok:false, error:"AUTH_FAILED" });
 
-  // parse body
-  let body = {};
-  try { body = typeof req.body === "string" ? JSON.parse(req.body) : (req.body || {}); } catch {}
-  const { task_id, token } = body || {};
-  if (!task_id) return res.status(400).json({ ok:false, error:"BAD_INPUT" });
+    let body = {};
+    try { body = typeof req.body === "string" ? JSON.parse(req.body) : (req.body || {}); } catch {}
+    const { task_id, token } = body || {};
+    if (!task_id) return res.status(400).json({ ok:false, error:"BAD_INPUT" });
 
-  // 1) coba pakai token
-  let { rows } = await sql`
-    SELECT id, user_id, reward, status, created_at
-    FROM ad_sessions
-    WHERE user_id=${user.id} AND task_id=${task_id}
-      ${token ? sql`AND token=${token}` : sql``}
-    ORDER BY created_at DESC
-    LIMIT 1
-  `;
-
-  // 2) fallback kalau gak ketemu: ambil sesi terbaru user+task dalam 10 menit terakhir
-  if (!rows.length) {
-    rows = await sql`
-      SELECT id, user_id, reward, status, created_at, token
+    // 1) cari sesi by token (paling akurat)
+    let { rows } = await sql`
+      SELECT id, user_id, reward, status, created_at
       FROM ad_sessions
       WHERE user_id=${user.id} AND task_id=${task_id}
-        AND created_at >= (now() - interval '${SESSION_GRACE_SEC} seconds')
+        ${token ? sql`AND token=${token}` : sql``}
       ORDER BY created_at DESC
       LIMIT 1
     `;
+
+    // 2) fallback: sesi terbaru user+task dalam N detik terakhir
+    if (!rows.length) {
+      rows = await sql`
+        SELECT id, user_id, reward, status, created_at, token
+        FROM ad_sessions
+        WHERE user_id=${user.id} AND task_id=${task_id}
+          AND created_at >= (now() - ${SESSION_GRACE_SEC} * interval '1 second')
+        ORDER BY created_at DESC
+        LIMIT 1
+      `;
+    }
+
+    // 3) FORCE (opsional): kalau tetap nggak ada → buat sesi baru supaya bisa kredit
+    if (!rows.length && CREDIT_FORCE) {
+      const reward = TASKS[task_id];
+      if (!reward) return res.status(400).json({ ok:false, error:"UNKNOWN_TASK" });
+
+      const inserted = await sql`
+        INSERT INTO ad_sessions (user_id, task_id, token, reward, status)
+        VALUES (${user.id}, ${task_id}, ${token || null}, ${reward}::numeric, 'pending')
+        RETURNING id, user_id, reward, status, created_at
+      `;
+      rows = inserted.rows || inserted; // tergantung helper
+    }
+
     if (!rows.length) return res.status(404).json({ ok:false, error:"NO_SESSION" });
+    const s = rows[0];
+
+    // idempoten
+    if (s.status === "credited") {
+      const bal = await sql`SELECT balance FROM users WHERE id=${user.id}`;
+      return res.json({ ok:true, credited:true, amount: s.reward, balance: (bal.rows?.[0]?.balance ?? bal[0]?.balance) });
+    }
+
+    // durasi tunggu
+    const waited = await sql`SELECT EXTRACT(EPOCH FROM (now() - ${s.created_at})) AS sec`;
+    const sec = Math.floor((waited.rows?.[0]?.sec ?? waited[0]?.sec) || 0);
+    if (sec < MIN_SECONDS) {
+      return res.json({ ok:true, awaiting:true, wait_seconds: MIN_SECONDS - sec });
+    }
+
+    // kredit
+    await sql`
+      INSERT INTO ledger (user_id, amount, reason, ref_id)
+      VALUES (${user.id}, ${s.reward}::numeric, 'ad_complete', ${token || String(s.id)})
+    `;
+    const up = await sql`
+      UPDATE users SET balance = balance + ${s.reward}::numeric, updated_at=now()
+      WHERE id=${user.id}
+      RETURNING balance
+    `;
+    await sql`UPDATE ad_sessions SET status='credited', completed_at=now() WHERE id=${s.id}`;
+
+    const balance = (up.rows?.[0]?.balance ?? up[0]?.balance);
+    return res.json({ ok:true, credited:true, amount: s.reward, balance });
+  } catch (e) {
+    console.error("reward/complete crash:", e);
+    // jangan 500 gelap—balikin detail supaya kelihatan di client/log
+    return res.status(200).json({ ok:false, error: String(e?.message || e) });
   }
-
-  const s = rows[0];
-
-  if (s.status === "credited") {
-    const bal = await sql`SELECT balance FROM users WHERE id=${user.id}`;
-    return res.json({ ok:true, credited:true, amount: s.reward, balance: bal[0]?.balance });
-  }
-
-  // cek waktu
-  const waited = await sql`SELECT EXTRACT(EPOCH FROM (now() - ${s.created_at})) AS sec`;
-  const sec = Math.floor(waited[0].sec || 0);
-  if (sec < MIN_SECONDS) {
-    return res.json({ ok:true, awaiting:true, wait_seconds: MIN_SECONDS - sec });
-  }
-
-  // kredit
-  await sql`
-    INSERT INTO ledger (user_id, amount, reason, ref_id)
-    VALUES (${user.id}, ${s.reward}::numeric, 'ad_complete', ${token || String(s.id)})
-  `;
-  const up = await sql`
-    UPDATE users SET balance = balance + ${s.reward}::numeric, updated_at=now()
-    WHERE id=${user.id}
-    RETURNING balance
-  `;
-  await sql`UPDATE ad_sessions SET status='credited', completed_at=now() WHERE id=${s.id}`;
-
-  return res.json({ ok:true, credited:true, amount: s.reward, balance: up[0].balance });
 };
