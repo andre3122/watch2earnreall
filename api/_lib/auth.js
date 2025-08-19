@@ -1,18 +1,6 @@
-// api/_lib/auth.js — Telegram auth (strict + permissive fallback)
-const { validateInitData } = require("./telegram");
+// api/_lib/auth.js — Telegram auth (strict + optional permissive)
+const { validateInitData, parseInitData } = require("./telegram");
 const { getUserOrCreate } = require("./db");
-
-// parse user dari raw initData (URL-encoded query string dari Telegram)
-function parseInitUser(raw) {
-  try {
-    const params = new URLSearchParams(raw);
-    const userStr = params.get("user") || params.get("tg_user");
-    if (!userStr) return null;
-    return JSON.parse(userStr);
-  } catch {
-    return null;
-  }
-}
 
 async function authFromHeader(req) {
   const PERMISSIVE = String(process.env.AUTH_PERMISSIVE || "0") === "1";
@@ -21,7 +9,7 @@ async function authFromHeader(req) {
 
   // 1) Ada initData dari Telegram WebApp
   if (raw) {
-    if (botToken) {
+    if (typeof validateInitData === "function" && botToken) {
       const v = validateInitData(raw, botToken, 24 * 3600);
       if (v.ok && v.data?.user) {
         const user = await getUserOrCreate(v.data.user);
@@ -30,7 +18,7 @@ async function authFromHeader(req) {
     }
     // Fallback permissive: terima user tanpa verifikasi hash
     if (PERMISSIVE) {
-      const tgUser = parseInitUser(raw);
+      const tgUser = parseInitData(raw)?.user;
       if (tgUser?.id) {
         const user = await getUserOrCreate(tgUser);
         return { ok: true, user, tgUser, source: "initData:permissive" };
@@ -50,7 +38,7 @@ async function authFromHeader(req) {
     } catch {}
   }
 
-  // 3) Permissive terakhir: bikin guest dari IP kalau diminta
+  // 3) Fallback permissive terakhir: guest by IP
   if (PERMISSIVE) {
     const ip = (req.headers["x-forwarded-for"] || req.socket?.remoteAddress || "0.0.0.0").split(",")[0].trim();
     const fakeId = Math.abs(ip.split(".").reduce((a, b) => (a * 131 + (+b || 0)) | 0, 7)) + 1000000000;
@@ -59,7 +47,6 @@ async function authFromHeader(req) {
     return { ok: true, user, tgUser, source: "ip-guest" };
   }
 
-  // 4) Tidak lolos
   return { ok: false, status: 401, error: "AUTH_FAILED" };
 }
 
