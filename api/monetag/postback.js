@@ -2,42 +2,43 @@
 const { sql } = require("../_lib/db");
 
 module.exports = async (req, res) => {
-  if (req.method !== "GET") {
-    return res.status(405).json({ ok: false, error: "METHOD_NOT_ALLOWED" });
-  }
-
-  // Monetag bisa kirim subid/sub_id/sub1/click_id — ambil apa pun yang ada
-  const q = req.query || {};
-  const token =
-    q.subid || q.sub_id || q.sub1 || q.click_id || q.token || q.t || "";
-
-  if (!token) {
-    return res
-      .status(400)
-      .json({ ok: false, error: "BAD_REQUEST", reason: "NO_TOKEN" });
-  }
-
   try {
-    // Ambil sesi iklan yang sedang menunggu postback
-    const { rows } = await sql`
+    // Monetag biasa kirim subid + payout; sediakan fallback lain juga
+    const token =
+      req.query.subid ||
+      req.query.token ||
+      "";
+
+    const payoutRaw =
+      req.query.payout ||
+      req.query.amount ||
+      req.query.sum ||
+      req.query.reward ||
+      "";
+
+    if (!token) return res.status(400).json({ ok: false, error: "NO_TOKEN" });
+
+    const payout = Math.max(0, Number(payoutRaw || 0));
+
+    // Kunci session iklan yg menunggu postback
+    const { rows: sessRows } = await sql`
       UPDATE ad_sessions
-      SET status = 'verified'
-      WHERE token = ${token}
-        AND status IN ('await_postback','pending')
-      RETURNING user_id, task_id, reward
+      SET status='completed'
+      WHERE token=${token} AND status IN ('await_postback','pending')
+      RETURNING id, user_id, task_id, reward
     `;
 
-    if (!rows.length) {
-      // Tidak apa2, jangan 500 — cukup info tidak ada session yg cocok
-      return res.status(200).json({ ok: false, reason: "NO_SESSION" });
+    if (!sessRows.length) {
+      return res.status(404).json({ ok: false, error: "NO_SESSION" });
     }
 
-    const s = rows[0];
+    const s = sessRows[0];
+    const amount = payout > 0 ? payout : Number(s.reward) || 0;
 
-    // Catat reward ke tabel task_completions (bukan "ledger" lagi)
+    // Catat completion —> inilah sumber data untuk VIEW public.ledger
     await sql`
       INSERT INTO task_completions (user_id, task_id, amount)
-      VALUES (${s.user_id}, ${s.task_id}, ${s.reward}::numeric)
+      VALUES (${s.user_id}, ${s.task_id}, ${amount}::numeric)
     `;
 
     return res.status(200).json({ ok: true });
