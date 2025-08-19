@@ -280,36 +280,85 @@
   }
 
   // ===== TASKS (server-validated + reward popup) =====
-  function initTasks() {
-    document.querySelectorAll(".task-card .btn-cta[data-action='watch']").forEach(btn => {
-      btn.addEventListener("click", async () => {
+  // ===== TASKS (server-timer) =====
+function initTasks() {
+  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+  document.querySelectorAll(".task-card .btn-cta[data-action='watch']").forEach(btn => {
+    // hindari double-binding
+    if (btn.__serverTimerBound) return;
+    btn.__serverTimerBound = true;
+
+    btn.addEventListener("click", async () => {
+      try {
         const taskId = btn.closest(".task-card")?.dataset?.taskId;
         if (!taskId) return;
-        if (state.tasks[taskId]?.completed) return;
+        if (state.tasks?.[taskId]?.completed) return;
 
-        // Optional: trigger Monetag ad
-        try { const fn = window[window.MONETAG_FN]; if (typeof fn === "function") fn(); } catch {}
-
+        // Optional: panggil fungsi iklan kalau ada
         try {
+          const fn = window[window.MONETAG_FN];
+          if (typeof fn === "function") fn();
+        } catch {}
+
+        // 1) Mulai task → server bikin sesi & token
+        const start = await safeFetch(`/api/task/create`, {
+          method: "POST",
+          body: JSON.stringify({ task_id: taskId })
+        });
+        if (!start?.ok || !start.token) {
+          return toast(start?.error || "Gagal mulai task.", "error");
+        }
+
+        const token = start.token;
+        const waitSec = Number(start.wait_seconds || 16);
+
+        // 2) Tunggu minimal X detik (server-timer)
+        await sleep(waitSec * 1000);
+
+        // 3) Minta kredit ke server (auto-retry kalau server bilang 'awaiting')
+        async function tryComplete() {
           const data = await safeFetch(`/api/reward/complete`, {
             method: "POST",
-            body: JSON.stringify({ task_id: taskId })
+            body: JSON.stringify({ task_id: taskId, token })
           });
+
           if (data?.credited) {
-            const amt = typeof data.amount === "number" ? data.amount : (state.tasks[taskId].reward || 0);
+            const amt = typeof data.amount === "number"
+              ? data.amount
+              : (state.tasks?.[taskId]?.reward || 0);
+
+            state.tasks = state.tasks || {};
+            state.tasks[taskId] = state.tasks[taskId] || {};
             state.tasks[taskId].completed = true;
-            setBalance(data.balance ?? (state.balance + amt));
+
+            setBalance(data.balance ?? ((state.balance || 0) + amt));
             btn.disabled = true;
-            showRewardPopup(amt, "Reward added!");
-          } else {
-            toast(data?.error || "Verification failed.", "error");
+
+            if (typeof showRewardPopup === "function") {
+              showRewardPopup(amt, "Reward added!");
+            } else {
+              toast(`+$${Number(amt).toFixed(2)}`, "success");
+            }
+            return;
           }
-        } catch (e) {
-          toast("Failed to reach server.", "error");
+
+          if (data?.awaiting && data.wait_seconds > 0) {
+            await sleep(Number(data.wait_seconds) * 1000);
+            return tryComplete();
+          }
+
+          toast(data?.error || "Verification failed.", "error");
         }
-      });
+
+        await tryComplete();
+      } catch (e) {
+        toast("Failed to reach server.", "error");
+      }
     });
-  }
+  });
+}
+
 
   // ====== REFERRAL: Inject UI & Styles ======
   function injectReferralStyles() {
