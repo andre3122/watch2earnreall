@@ -1,30 +1,40 @@
 // api/task/create.js
-const crypto = require('crypto');
-const { sql } = require('../_lib/db');
-const { authFromHeader } = require('../_lib/auth');
+const crypto = require("crypto");
+const { sql } = require("../_lib/db");
+const { authFromHeader } = require("../_lib/auth");
 
-// simple fixed rewards per ad task
+// ==> Reward per task iklan
 const TASKS = { ad1: 0.01, ad2: 0.01 };
 
 module.exports = async (req, res) => {
-  if (req.method !== 'POST') return res.status(405).json({ ok:false, error:"METHOD_NOT_ALLOWED" });
+  if (req.method !== "POST") return res.status(405).json({ ok:false, error:"METHOD_NOT_ALLOWED" });
 
-  const a = await authFromHeader(req);
-  if (!a.ok) return res.status(a.status).json({ ok:false, error:"AUTH_FAILED" });
+  const { ok, status, user } = await authFromHeader(req);
+  if (!ok || !user) return res.status(status || 401).json({ ok:false, error:"AUTH_FAILED" });
 
-  const body = req.body || {};
-  const task_id = body.task_id;
+  // robust body parse
+  let body = {};
+  try { body = typeof req.body === "string" ? JSON.parse(req.body) : (req.body || {}); } catch {}
+  const { task_id } = body || {};
+
   const reward = TASKS?.[task_id];
-  if (!reward) return res.status(400).json({ ok:false, error:"UNKNOWN_TASK" });
+  if (!task_id || !reward) return res.status(400).json({ ok:false, error:"BAD_TASK" });
 
-  const token = crypto.randomBytes(16).toString('hex');
+  const token = crypto.randomBytes(16).toString("hex");
+
+  // opsional: kalau kamu punya link iklan (bukan wajib buat server-timer)
   const base = process.env.MONETAG_AD_URL || "";
   const param = process.env.MONETAG_TOKEN_PARAM || "subid";
-  const adUrl = base ? (base.includes("{TOKEN}") ? base.replace("{TOKEN}", token) : `${base}${base.includes("?") ? "&":"?"}${param}=${token}`) : "";
+  const adUrl = base
+    ? (base.includes("{TOKEN}") ? base.replace("{TOKEN}", token)
+       : `${base}${base.includes("?") ? "&" : "?"}${param}=${token}`)
+    : "";
 
   await sql`
     INSERT INTO ad_sessions (user_id, task_id, token, reward, status)
-    VALUES (${a.user.id}, ${task_id}, ${token}, ${reward}::numeric, 'pending')`;
+    VALUES (${user.id}, ${task_id}, ${token}, ${reward}::numeric, 'pending')
+  `;
 
-  res.status(200).json({ ok:true, token, ad_url: adUrl });
+  const MIN_SECONDS = Number(process.env.TASK_MIN_SECONDS || 16);
+  res.status(200).json({ ok:true, token, ad_url: adUrl, wait_seconds: MIN_SECONDS });
 };
