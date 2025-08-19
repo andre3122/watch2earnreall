@@ -47,8 +47,8 @@ module.exports = async (req, res) => {
       return res.json({ ok: true, message: "ledger ensured" });
     }
 
-    // default biar gak 400 kalau lupa param
-    return res.json({ ok: true, action, header_value: req.headers["x-telegram-test-user"] || null });
+    // default: jangan error lagi
+    return res.json({ ok: true, action });
   } catch (e) {
     console.error("debug/echo crash:", e);
     return res.status(500).json({ ok:false, error:String(e.message||e) });
