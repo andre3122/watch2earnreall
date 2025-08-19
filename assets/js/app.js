@@ -541,6 +541,76 @@
     // Home → referral shortcut
     els.btnHomeRefer?.addEventListener?.("click", () => {
       document.querySelector('.tab[data-target="referral"]')?.click();
+    // ===== TASKS Server-Timer (tempel di atas init();) =====
+(function () {
+  function sleep(ms){ return new Promise(r=>setTimeout(r, ms)); }
+
+  document.querySelectorAll('[data-task]').forEach((btn) => {
+    // hindari double-binding
+    if (btn.__serverTimerBound) return;
+    btn.__serverTimerBound = true;
+
+    btn.addEventListener("click", async () => {
+      try {
+        const taskId = btn.dataset.task;
+        if (!taskId) return toast("Task invalid.", "error");
+        if (btn.disabled) return;
+
+        // 1) Mulai task -> dapat token + wait_seconds
+        const start = await safeFetch(`/api/task/create`, {
+          method: "POST",
+          body: JSON.stringify({ task_id: taskId })
+        });
+        if (!start?.ok || !start.token) return toast(start?.error || "Gagal mulai task.", "error");
+
+        const token = start.token;
+        const waitSec = Number(start.wait_seconds || 16);
+
+        // 2) Countdown minimal (kalau mau, tampilkan di UI sendiri)
+        await sleep(waitSec * 1000);
+
+        // 3) Minta kredit — kalau belum cukup waktu, server balas awaiting + sisa detik
+        async function tryComplete() {
+          const data = await safeFetch(`/api/reward/complete`, {
+            method: "POST",
+            body: JSON.stringify({ task_id: taskId, token })
+          });
+
+          if (data?.credited) {
+            const amt = typeof data.amount === "number" ? data.amount :
+              (window.state?.tasks?.[taskId]?.reward || 0);
+
+            if (window.state) {
+              window.state.tasks = window.state.tasks || {};
+              window.state.tasks[taskId] = window.state.tasks[taskId] || {};
+              window.state.tasks[taskId].completed = true;
+              if (typeof setBalance === "function") {
+                setBalance(data.balance ?? ((window.state.balance || 0) + amt));
+              }
+            }
+
+            btn.disabled = true;
+            if (typeof showRewardPopup === "function") showRewardPopup(amt, "Reward added!");
+            else toast(`+${amt}`, "success");
+            return;
+          }
+
+          if (data?.awaiting && data.wait_seconds > 0) {
+            await sleep(Number(data.wait_seconds) * 1000);
+            return tryComplete();
+          }
+
+          toast(data?.error || "Verification failed.", "error");
+        }
+
+        await tryComplete();
+      } catch (e) {
+        toast("Failed to reach server.", "error");
+      }
+    });
+  });
+})();
+       
     });
   }
 
