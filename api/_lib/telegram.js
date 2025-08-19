@@ -1,33 +1,51 @@
-// api/_lib/telegram.js
-const crypto = require('crypto');
+// api/_lib/telegram.js — validator Telegram initData (resmi)
+const crypto = require("crypto");
 
-function parseInitData(initData) {
-  // Minimal parse; optional verification jika TELEGRAM_BOT_TOKEN di-set
+/**
+ * Parse raw initData string dari Telegram WebApp (querystring)
+ * return { user, hash, auth_date, payload }
+ */
+function parseInitData(raw) {
+  const params = new URLSearchParams(raw);
+  const data = {};
+  for (const [k, v] of params.entries()) data[k] = v;
+
+  const user = data.user ? JSON.parse(data.user) : null;
+  const hash = data.hash || "";
+  const auth_date = Number(data.auth_date || 0);
+
+  // payload = key=value\n (exclude hash), sorted asc
+  delete data.hash;
+  const payload = Object.keys(data)
+    .sort()
+    .map((k) => `${k}=${data[k]}`)
+    .join("\n");
+
+  return { user, hash, auth_date, payload };
+}
+
+/**
+ * Validasi initData sesuai dok Telegram:
+ *  secret = sha256(bot_token)
+ *  hash   = HMAC_SHA256(payload, secret)
+ */
+function validateInitData(raw, botToken, maxAgeSec = 24 * 3600) {
   try {
-    const params = new URLSearchParams(initData);
-    const userStr = params.get('user');
-    const hash = params.get('hash');
-    const user = userStr ? JSON.parse(userStr) : null;
-    if (process.env.TELEGRAM_BOT_TOKEN && user && hash) {
-      const dataCheckArr = [];
-      for (const [k, v] of params.entries()) {
-        if (k === 'hash') continue;
-        dataCheckArr.push(`${k}=${v}`);
-      }
-      dataCheckArr.sort();
-      const dataCheckString = dataCheckArr.join('\n');
-      const secretKey = crypto.createHmac('sha256', 'WebAppData')
-        .update(process.env.TELEGRAM_BOT_TOKEN)
-        .digest();
-      const calcHash = crypto.createHmac('sha256', secretKey)
-        .update(dataCheckString)
-        .digest('hex');
-      if (calcHash !== hash) return null;
+    const { user, hash, auth_date, payload } = parseInitData(raw);
+    if (!hash) return { ok: false, error: "no-hash" };
+    if (!botToken) return { ok: false, error: "no-bot-token" };
+
+    const secret = crypto.createHash("sha256").update(botToken).digest();
+    const hmac = crypto.createHmac("sha256", secret).update(payload).digest("hex");
+
+    if (hmac !== (hash || "").toLowerCase()) return { ok: false, error: "bad-hash" };
+    if (maxAgeSec && auth_date && (Date.now() / 1000 - auth_date) > maxAgeSec) {
+      return { ok: false, error: "expired" };
     }
-    return { user };
-  } catch {
-    return null;
+    return { ok: true, data: { user, auth_date } };
+  } catch (e) {
+    return { ok: false, error: "exception:" + (e?.message || e) };
   }
 }
 
-module.exports = { parseInitData };
+module.exports = { validateInitData, parseInitData };
