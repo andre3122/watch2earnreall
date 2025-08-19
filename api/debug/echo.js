@@ -1,6 +1,6 @@
 // api/debug/echo.js  (satu function untuk echo, auth, tables)
-const { authFromHeader } = require("./_lib/auth");
-const { sql } = require("./_lib/db");
+const { authFromHeader } = require("../_lib/auth");
+const { sql } = require("../_lib/db");
 
 module.exports = async (req, res) => {
   try {
