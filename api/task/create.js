@@ -22,7 +22,7 @@ module.exports = async (req, res) => {
 
   const token = crypto.randomBytes(16).toString("hex");
 
-  // opsional: kalau kamu punya link iklan (bukan wajib buat server-timer)
+  // opsional: link iklan (tidak wajib untuk server-timer)
   const base = process.env.MONETAG_AD_URL || "";
   const param = process.env.MONETAG_TOKEN_PARAM || "subid";
   const adUrl = base
