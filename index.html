@@ -196,5 +196,72 @@
     
   <script src="./config.js"></script>
   <script src="./app.js" defer></script>
+
+  <!-- === W2E minimal glue (tidak mengubah UI) === -->
+  <script>
+  (function(){
+    function sleep(ms){ return new Promise(r => setTimeout(r, ms)); }
+    function tgInitData(){ try{ return window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData || '' }catch(e){ return '' } }
+
+    async function callApi(path, body){
+      const headers = { 'Content-Type': 'application/json' };
+      const initData = tgInitData();
+      if (initData) headers['x-telegram-init-data'] = initData;
+      const res = await fetch('/api/' + path, { method:'POST', headers, body: JSON.stringify(body || {}) });
+      return res.json();
+    }
+
+    async function loadBalance(){
+      try{
+        const initData = tgInitData(); const h = initData ? { 'x-telegram-init-data': initData } : {};
+        const r = await fetch('/api/user/get', { headers: h });
+        const j = await r.json();
+        if (j && j.user && j.user.balance != null) {
+          document.getElementById('balance').textContent = '$' + Number(j.user.balance).toFixed(2);
+        }
+      }catch(e){}
+    }
+
+    async function handleWatch(taskId, btn){
+      if (btn && btn._busy) return;
+      if (btn) btn._busy = true;
+      try{
+        const create = await callApi('task/create', { task_id: taskId });
+        if (!create.ok) { console.log('[watch] create failed', create); alert('Gagal memulai task: ' + (create.error || '?')); return; }
+
+        let wait = Number(create.wait_seconds || 16);
+        await sleep(wait * 1000);
+
+        for (let i=0;i<6;i++){
+          const comp = await callApi('reward/complete', { task_id: taskId, token: create.token });
+          if (comp.awaiting && comp.wait_seconds){
+            await sleep(Number(comp.wait_seconds) * 1000);
+            continue;
+          }
+          if (comp.credited){
+            document.getElementById('balance').textContent = '$' + Number(comp.balance).toFixed(2);
+            return;
+          }
+          await sleep(3000);
+        }
+        alert('Verifikasi gagal, coba lagi.');
+      } finally {
+        if (btn) btn._busy = false;
+      }
+    }
+
+    // Auto binding setelah DOM siap
+    document.addEventListener('DOMContentLoaded', function(){
+      // muat saldo awal
+      loadBalance();
+
+      document.querySelectorAll('.task-card [data-action="watch"]').forEach(function(btn){
+        const card = btn.closest('.task-card');
+        const taskId = card && card.getAttribute('data-task-id') || 'ad1';
+        btn.addEventListener('click', function(){ handleWatch(taskId, btn); });
+      });
+    });
+  })();
+  </script>
 </body>
 </html>
