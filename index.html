@@ -347,6 +347,210 @@
   refreshUser();
 })();
 </script>
+<script>
+/* ==== 1) Patch fetch: suntik x-telegram-init-data utk /api pada origin yg sama ==== */
+(function () {
+  function getInitData() {
+    try { return window.Telegram && Telegram.WebApp && Telegram.WebApp.initData || ''; }
+    catch(e){ return ''; }
+  }
+  const _fetch = window.fetch;
+  window.fetch = function (input, init) {
+    try {
+      const urlStr = (typeof input === 'string') ? input : (input && input.url) || '';
+      const u = new URL(urlStr, location.href);
+      if (u.origin === location.origin && u.pathname.startsWith('/api/')) {
+        const headers = new Headers((init && init.headers) || (typeof input !== 'string' ? input.headers : undefined) || {});
+        const id = getInitData();
+        if (id && !headers.has('x-telegram-init-data')) {
+          headers.set('x-telegram-init-data', id);
+        }
+        init = Object.assign({}, init, { headers });
+      }
+    } catch (e) {}
+    return _fetch(input, init);
+  };
+})();
+</script>
+
+<script>
+/* ==== 2) Glue UI: Check-in & referral percent ==== */
+(function(){
+  const SCHEDULE = ["0.02","0.04","0.06","0.08","0.10","0.12","0.14","0.16","0.18"];
+  const tilesEl = document.getElementById('checkinTiles');
+  const btn = document.getElementById('btnClaim');
+  const btnTxt = document.getElementById('claimText');
+  const balEl = document.getElementById('balance');
+
+  function toast(m){ try{Telegram.WebApp.showAlert(m);}catch{alert(m);} }
+
+  function renderTiles(streak){
+    const done = Number(streak || 0); // jumlah hari yang sudah beres (server truth)
+    let html = '';
+    for (let i=1;i<=9;i++){
+      const amount = SCHEDULE[i-1];
+      const claimed = (i <= done);
+      const cls = claimed ? 'tile claimed' : (i===Math.min(done+1,9) ? 'tile current' : 'tile locked');
+      html += `
+        <div class="${cls}" data-day="${i}">
+          <div class="day">Day ${i}</div>
+          <div class="amt">${amount}</div>
+          ${claimed ? '<div class="tick">✔</div>' : ''}
+        </div>`;
+    }
+    if (tilesEl) tilesEl.innerHTML = html;
+  }
+
+  async function refreshUserUI(){
+    const r = await fetch('/api/user/get');
+    const j = await r.json();
+    if (!j.ok) return;
+
+    // balance
+    if (balEl && j.user && j.user.balance != null) {
+      balEl.textContent = `$${Number(j.user.balance).toFixed(2)}`;
+    }
+
+    // cekin: disable/label by server
+    const already = !!j.user?.checkin_today;
+    if (btn) {
+      btn.disabled = already;
+      if (btnTxt) btnTxt.textContent = already ? 'Sudah di-claim' : 'Claim Bonus';
+      if (already) btn.classList.add('is-claimed'); else btn.classList.remove('is-claimed');
+    }
+    renderTiles(j.user?.streak || 0);
+
+    // referral percent UI (ganti 25% → ref_percent)
+    const rp = Number(j.ref_percent || 10);
+    const badge = document.querySelector('.ref-badge');
+    if (badge) badge.textContent = `${rp}%`;
+    const homeMut = document.querySelector('.home-ref-card .muted');
+    if (homeMut) homeMut.textContent = `Get ${rp}% of their earnings`;
+    const heroP = document.querySelector('.ref-hero p.muted');
+    if (heroP) heroP.innerHTML = `Earn <strong>${rp}%</strong> of your friends earnings for life!`;
+  }
+
+  // klik Claim
+  if (btn) {
+    btn.addEventListener('click', async () => {
+      if (btn.disabled) return;
+      btn.disabled = true;
+      try {
+        const r = await fetch('/api/checkin/claim', { method:'POST' });
+        const j = await r.json();
+        if (!j.ok) {
+          btn.disabled = false;
+          return toast(j.error || 'Claim gagal');
+        }
+        // update cepat dari response
+        if (balEl && j.balance != null) balEl.textContent = `$${Number(j.balance).toFixed(2)}`;
+        if (btnTxt) btnTxt.textContent = j.already ? 'Sudah di-claim' : 'Claimed!';
+        btn.classList.add('is-claimed');
+        // render ulang pakai streak/day dari server
+        renderTiles(j.streak || j.day || 0);
+      } catch (e) {
+        btn.disabled = false;
+        toast('Failed to reach server');
+      }
+    });
+  }
+
+  // initial
+  refreshUserUI();
+})();
+</script>
+
+<script>
+/* ==== 3) Glue UI: Task Iklan (update balance cepat & countdown) ==== */
+(function(){
+  const balEl = document.getElementById('balance');
+
+  function setBusy(btn, v){ 
+    if (!btn) return;
+    if (v) { btn.setAttribute('data-busy','1'); btn.disabled = true; }
+    else   { btn.removeAttribute('data-busy');   btn.disabled = false; }
+  }
+  function setLabel(btn, t){
+    if (!btn) return;
+    const prev = btn.getAttribute('data-prev') || btn.textContent;
+    if (!btn.hasAttribute('data-prev')) btn.setAttribute('data-prev', prev);
+    btn.textContent = t;
+  }
+  function resetLabel(btn){
+    if (!btn) return;
+    const prev = btn.getAttribute('data-prev');
+    if (prev) btn.textContent = prev;
+    btn.removeAttribute('data-prev');
+  }
+
+  async function watchTask(taskId, btn){
+    if (btn && btn.getAttribute('data-busy') === '1') return;
+    setBusy(btn, true);
+    setLabel(btn, 'Starting…');
+
+    try{
+      // 1) create
+      const c1r = await fetch('/api/task/create', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ task_id: taskId })
+      });
+      const c1 = await c1r.json();
+      if (!c1.ok) { setLabel(btn, 'Failed'); return; }
+
+      // 2) countdown
+      let left = Number(c1.wait_seconds || 16);
+      while (left > 0) {
+        setLabel(btn, `Watching ${left}s`);
+        await new Promise(r => setTimeout(r, 1000));
+        left--;
+      }
+      setLabel(btn, 'Verifying…');
+
+      // 3) poll complete (max 6x)
+      for (let i=0;i<6;i++){
+        const r = await fetch('/api/reward/complete', {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ task_id: taskId, token: c1.token })
+        });
+        const j = await r.json();
+
+        if (j.awaiting && j.wait_seconds) {
+          let w = Number(j.wait_seconds);
+          while (w > 0) { setLabel(btn, `Verifying ${w}s`); await new Promise(r => setTimeout(r, 1000)); w--; }
+          continue;
+        }
+        if (j.credited) {
+          if (balEl && j.balance != null) {
+            balEl.textContent = `$${Number(j.balance).toFixed(2)}`; // UPDATE CEPAT
+          }
+          setLabel(btn, 'Done ✓');
+          setTimeout(() => { resetLabel(btn); setBusy(btn,false); }, 1200);
+          return;
+        }
+        // retry tiap 3s
+        setLabel(btn, 'Verifying…');
+        await new Promise(r => setTimeout(r, 3000));
+      }
+      setLabel(btn, 'Try again');
+    } catch (e) {
+      setLabel(btn, 'Error');
+    } finally {
+      setTimeout(() => { resetLabel(btn); setBusy(btn,false); }, 1200);
+    }
+  }
+
+  // Binding ke semua tombol task
+  document.addEventListener('DOMContentLoaded', function(){
+    document.querySelectorAll('.task-card [data-action="watch"]').forEach(function(btn){
+      const card = btn.closest('.task-card');
+      const taskId = card && card.getAttribute('data-task-id') || 'ad1';
+      btn.addEventListener('click', () => watchTask(taskId, btn));
+    });
+  });
+})();
+</script>
 
   <script src="./app.js" defer></script>
 </body>
