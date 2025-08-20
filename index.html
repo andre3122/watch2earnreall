@@ -192,107 +192,72 @@
         <span>Profil</span>
       </button>
     </nav>
+  </div>
 
-    
   <script src="./config.js"></script>
-    <script>
-/* Inject x-telegram-init-data ke SEMUA fetch API (relatif & absolut di origin yang sama) */
-(function () {
-  function getInitData() {
-    try { return window.Telegram && Telegram.WebApp && Telegram.WebApp.initData || ''; }
-    catch(e){ return ''; }
-  }
-  const _fetch = window.fetch;
-  window.fetch = function (input, init) {
-    try {
-      const urlStr = (typeof input === 'string') ? input : (input && input.url) || '';
-      const u = new URL(urlStr, location.href);
-      // hanya suntik kalau ke ORIGIN yang sama dan path /api/...
-      if (u.origin === location.origin && u.pathname.startsWith('/api/')) {
-        const headers =
-          new Headers(
-            (init && init.headers) ||
-            (typeof input !== 'string' ? input.headers : undefined) ||
-            {}
-          );
-        const id = getInitData();
-        if (id && !headers.has('x-telegram-init-data')) {
-          headers.set('x-telegram-init-data', id);
-        }
-        init = Object.assign({}, init, { headers });
-      }
-    } catch (e) {}
-    return _fetch(input, init);
-  };
-})();
-</script>
-  <script src="./app.js" defer></script>
 
-  <!-- === W2E minimal glue (tidak mengubah UI) === -->
+  <!-- Inject header initData ke semua fetch('/api/*') -->
   <script>
-  (function(){
-    function sleep(ms){ return new Promise(r => setTimeout(r, ms)); }
-    function tgInitData(){ try{ return window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData || '' }catch(e){ return '' } }
+  (function () {
+    function getInitData() {
+      try { return window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData || ''; }
+      catch(e){ return ''; }
+    }
+    const _fetch = window.fetch;
+    window.fetch = function (input, init) {
+      try {
+        const url = (typeof input === 'string' ? input : input.url) || '';
+        if (url.startsWith('/api/')) {
+          const headers = new Headers((init && init.headers) || {});
+          const id = getInitData();
+          if (id && !headers.has('x-telegram-init-data')) {
+            headers.set('x-telegram-init-data', id);
+          }
+          init = Object.assign({}, init, { headers });
+        }
+      } catch (e) {}
+      return _fetch(input, init);
+    };
+  })();
+  </script>
 
-    async function callApi(path, body){
-      const headers = { 'Content-Type': 'application/json' };
-      const initData = tgInitData();
-      if (initData) headers['x-telegram-init-data'] = initData;
-      const res = await fetch('/api/' + path, { method:'POST', headers, body: JSON.stringify(body || {}) });
-      return res.json();
+  <!-- GLUE: Daily Check-in (kirim POST + update saldo/label) -->
+  <script>
+  (function () {
+    const btn = document.getElementById('btnClaim');
+    if (!btn) return;
+
+    const txt = document.getElementById('claimText');
+    const bal = document.getElementById('balance');
+
+    function toast(msg){
+      try { Telegram.WebApp.showAlert(msg); } catch { alert(msg); }
     }
 
-    async function loadBalance(){
-      try{
-        const initData = tgInitData(); const h = initData ? { 'x-telegram-init-data': initData } : {};
-        const r = await fetch('/api/user/get', { headers: h });
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      try {
+        const r = await fetch('/api/checkin/claim', { method: 'POST' });
         const j = await r.json();
-        if (j && j.user && j.user.balance != null) {
-          document.getElementById('balance').textContent = '$' + Number(j.user.balance).toFixed(2);
+
+        if (!j.ok) {
+          btn.disabled = false;
+          return toast(j.error || 'Claim gagal');
         }
-      }catch(e){}
-    }
 
-    async function handleWatch(taskId, btn){
-      if (btn && btn._busy) return;
-      if (btn) btn._busy = true;
-      try{
-        const create = await callApi('task/create', { task_id: taskId });
-        if (!create.ok) { console.log('[watch] create failed', create); alert('Gagal memulai task: ' + (create.error || '?')); return; }
-
-        let wait = Number(create.wait_seconds || 16);
-        await sleep(wait * 1000);
-
-        for (let i=0;i<6;i++){
-          const comp = await callApi('reward/complete', { task_id: taskId, token: create.token });
-          if (comp.awaiting && comp.wait_seconds){
-            await sleep(Number(comp.wait_seconds) * 1000);
-            continue;
-          }
-          if (comp.credited){
-            document.getElementById('balance').textContent = '$' + Number(comp.balance).toFixed(2);
-            return;
-          }
-          await sleep(3000);
+        if (bal && j.balance != null) {
+          bal.textContent = `$${Number(j.balance).toFixed(2)}`;
         }
-        alert('Verifikasi gagal, coba lagi.');
-      } finally {
-        if (btn) btn._busy = false;
+        if (txt) txt.textContent = j.already ? 'Sudah di-claim' : 'Claimed!';
+        btn.classList.add('is-claimed');
+      } catch (e) {
+        btn.disabled = false;
+        toast('Failed to reach server');
       }
-    }
-
-    // Auto binding setelah DOM siap
-    document.addEventListener('DOMContentLoaded', function(){
-      // muat saldo awal
-      loadBalance();
-
-      document.querySelectorAll('.task-card [data-action="watch"]').forEach(function(btn){
-        const card = btn.closest('.task-card');
-        const taskId = card && card.getAttribute('data-task-id') || 'ad1';
-        btn.addEventListener('click', function(){ handleWatch(taskId, btn); });
-      });
     });
   })();
   </script>
+
+  <script src="./app.js" defer></script>
 </body>
 </html>
