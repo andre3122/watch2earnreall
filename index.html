@@ -196,18 +196,25 @@
     
   <script src="./config.js"></script>
     <script>
-/* Inject header initData ke semua fetch('/api/...') */
+/* Inject x-telegram-init-data ke SEMUA fetch API (relatif & absolut di origin yang sama) */
 (function () {
   function getInitData() {
-    try { return window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData || ''; }
+    try { return window.Telegram && Telegram.WebApp && Telegram.WebApp.initData || ''; }
     catch(e){ return ''; }
   }
   const _fetch = window.fetch;
   window.fetch = function (input, init) {
     try {
-      const url = (typeof input === 'string') ? input : (input && input.url) || '';
-      if (url.startsWith('/api/')) {
-        const headers = new Headers((init && init.headers) || {});
+      const urlStr = (typeof input === 'string') ? input : (input && input.url) || '';
+      const u = new URL(urlStr, location.href);
+      // hanya suntik kalau ke ORIGIN yang sama dan path /api/...
+      if (u.origin === location.origin && u.pathname.startsWith('/api/')) {
+        const headers =
+          new Headers(
+            (init && init.headers) ||
+            (typeof input !== 'string' ? input.headers : undefined) ||
+            {}
+          );
         const id = getInitData();
         if (id && !headers.has('x-telegram-init-data')) {
           headers.set('x-telegram-init-data', id);
