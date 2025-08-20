@@ -1,9 +1,8 @@
-// api/task/create.js
+// api/task/create.js — bikin sesi + token, kasih wait_seconds
 const crypto = require("crypto");
-const { sql } = require("../_lib/db");
+const { sql } = require("../_lib/db");     // asumsi helper Postgres kamu
 const { authFromHeader } = require("../_lib/auth");
 
-// Reward per task
 const TASKS = { ad1: 0.01, ad2: 0.01 };
 
 module.exports = async (req, res) => {
@@ -12,22 +11,12 @@ module.exports = async (req, res) => {
   const { ok, status, user } = await authFromHeader(req);
   if (!ok || !user) return res.status(status || 401).json({ ok:false, error:"AUTH_FAILED" });
 
-  let body = {};
-  try { body = typeof req.body === "string" ? JSON.parse(req.body) : (req.body || {}); } catch {}
+  let body={}; try{ body=typeof req.body==="string"?JSON.parse(req.body):(req.body||{}) }catch{}
   const { task_id } = body || {};
-
-  const reward = TASKS?.[task_id];
+  const reward = TASKS[task_id];
   if (!task_id || !reward) return res.status(400).json({ ok:false, error:"BAD_TASK" });
 
   const token = crypto.randomBytes(16).toString("hex");
-
-  // opsional: link iklan
-  const base = process.env.MONETAG_AD_URL || "";
-  const param = process.env.MONETAG_TOKEN_PARAM || "subid";
-  const adUrl = base
-    ? (base.includes("{TOKEN}") ? base.replace("{TOKEN}", token)
-       : `${base}${base.includes("?") ? "&" : "?"}${param}=${token}`)
-    : "";
 
   await sql`
     INSERT INTO ad_sessions (user_id, task_id, token, reward, status)
@@ -35,5 +24,5 @@ module.exports = async (req, res) => {
   `;
 
   const MIN_SECONDS = Number(process.env.TASK_MIN_SECONDS || 16);
-  res.status(200).json({ ok:true, token, ad_url: adUrl, wait_seconds: MIN_SECONDS });
+  res.json({ ok:true, token, wait_seconds: MIN_SECONDS });
 };
