@@ -257,6 +257,96 @@
     });
   })();
   </script>
+<script>
+(function(){
+  const SCHEDULE = ["0.02","0.04","0.06","0.08","0.10","0.12","0.14","0.16","0.18"];
+  const tilesEl = document.getElementById('checkinTiles');
+  const btn = document.getElementById('btnClaim');
+  const btnTxt = document.getElementById('claimText');
+  const balEl = document.getElementById('balance');
+
+  function toast(m){ try{Telegram.WebApp.showAlert(m);}catch{alert(m);} }
+
+  function renderTiles(streak, already){
+    // day yang sudah selesai = streak (kalau belum klaim hari ini)
+    // kalau sudah klaim hari ini, day=streak (termasuk hari ini)
+    const done = Number(streak || 0);
+    let html = '';
+    for (let i=1;i<=9;i++){
+      const amount = SCHEDULE[i-1];
+      const claimed = (i <= done);
+      const cls = claimed ? 'tile claimed' : (i===Math.min(done+1,9) ? 'tile current' : 'tile locked');
+      html += `
+        <div class="${cls}" data-day="${i}">
+          <div class="day">Day ${i}</div>
+          <div class="amt">${amount}</div>
+          ${claimed ? '<div class="tick">✔</div>' : ''}
+        </div>`;
+    }
+    if (tilesEl) tilesEl.innerHTML = html;
+  }
+
+  async function refreshUser(){
+    try{
+      const r = await fetch('/api/user/get');
+      const j = await r.json();
+      if (!j.ok) return;
+
+      // saldo
+      if (balEl && j.user && j.user.balance != null){
+        balEl.textContent = `$${Number(j.user.balance).toFixed(2)}`;
+      }
+
+      // state check-in (disable tombol kalau sudah klaim hari ini)
+      const last = j.user?.last_checkin ? String(j.user.last_checkin).slice(0,10) : null;
+      const today = new Date().toISOString().slice(0,10);
+      const already = (last === today);
+      if (btn){
+        btn.disabled = !!already;
+        if (btnTxt) btnTxt.textContent = already ? 'Sudah di-claim' : 'Claim Bonus';
+        if (already) btn.classList.add('is-claimed'); else btn.classList.remove('is-claimed');
+      }
+      renderTiles(j.user?.streak || 0, already);
+
+      // REF % → ubah semua teks "25%"
+      const rp = Number(j.ref_percent || 10);
+      const badge = document.querySelector('.ref-badge');
+      if (badge) badge.textContent = `${rp}%`;
+      const homeMut = document.querySelector('.home-ref-card .muted');
+      if (homeMut) homeMut.textContent = `Get ${rp}% of their earnings`;
+      const heroP = document.querySelector('.ref-hero p.muted');
+      if (heroP) heroP.innerHTML = `Earn <strong>${rp}%</strong> of your friends earnings for life!`;
+    }catch{}
+  }
+
+  if (btn){
+    btn.addEventListener('click', async () => {
+      if (btn.disabled) return;
+      btn.disabled = true;
+      try{
+        const r = await fetch('/api/checkin/claim', { method:'POST' });
+        const j = await r.json();
+        if (!j.ok){
+          btn.disabled = false;
+          return toast(j.error || 'Claim gagal');
+        }
+        // update cepat dari response
+        if (balEl && j.balance != null) balEl.textContent = `$${Number(j.balance).toFixed(2)}`;
+        if (btnTxt) btnTxt.textContent = j.already ? 'Sudah di-claim' : 'Claimed!';
+        btn.classList.add('is-claimed');
+        // rerender tile sesuai day terbaru
+        renderTiles(j.streak || j.day || 0, true);
+      }catch(e){
+        btn.disabled = false;
+        toast('Failed to reach server');
+      }
+    });
+  }
+
+  // initial
+  refreshUser();
+})();
+</script>
 
   <script src="./app.js" defer></script>
 </body>
