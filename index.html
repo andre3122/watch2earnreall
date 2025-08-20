@@ -368,6 +368,67 @@
       });
     })();
   </script>
+<script>
+/* PATCH: tombol check-in tidak bisa diklik */
+(function () {
+  var oldBtn = document.getElementById('btnClaim');
+  if (!oldBtn) return;
+
+  // Ganti element agar semua event listener lama (termasuk yang 'nyegel') hilang
+  var btn = oldBtn.cloneNode(true);
+  oldBtn.parentNode.replaceChild(btn, oldBtn);
+
+  var txt = document.getElementById('claimText');
+  var bal = document.getElementById('balance');
+
+  function toast(msg){ try{Telegram.WebApp.showAlert(msg);}catch{alert(msg);} }
+
+  // Optional: sinkron state awal dari server (kalau sudah claim hari ini → disable)
+  (async function syncInit(){
+    try{
+      const r = await fetch('/api/user/get');
+      const j = await r.json();
+      if (j?.ok) {
+        if (j.user && j.user.balance != null && bal) {
+          bal.textContent = `$${Number(j.user.balance).toFixed(2)}`;
+        }
+        if (btn) {
+          const already = !!j.user?.checkin_today;
+          btn.disabled = already;
+          if (txt) txt.textContent = already ? 'Sudah di-claim' : 'Claim Bonus';
+          if (already) btn.classList.add('is-claimed'); else btn.classList.remove('is-claimed');
+        }
+      }
+    }catch{}
+  })();
+
+  // Click handler baru (bersih)
+  btn.addEventListener('click', async function (e) {
+    e.preventDefault();
+    if (btn.disabled) return;
+
+    btn.disabled = true;
+    try {
+      const r = await fetch('/api/checkin/claim', { method: 'POST' });
+      const j = await r.json();
+
+      if (!j.ok) {
+        btn.disabled = false;
+        return toast(j.error || 'Claim gagal');
+      }
+
+      if (bal && j.balance != null) {
+        bal.textContent = `$${Number(j.balance).toFixed(2)}`;
+      }
+      if (txt) txt.textContent = j.already ? 'Sudah di-claim' : 'Claimed!';
+      btn.classList.add('is-claimed');
+    } catch (e2) {
+      btn.disabled = false;
+      toast('Failed to reach server');
+    }
+  });
+})();
+</script>
 
   <script src="./app.js" defer></script>
 </body>
