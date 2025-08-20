@@ -1,7 +1,23 @@
-// api/setup/migrate.js — INFO + MIGRATE + FIX users.id (tanpa nambah file)
+// api/setup/migrate.js — LOCKED by secret (default: 404)
 const { sql, q } = require("../_lib/db");
 
+// --- helper auth ---
+function checkSecret(req) {
+  const SECRET = process.env.SETUP_SECRET || "";
+  if (!SECRET) return false; // jika env belum diset, selalu 404
+  const url = new URL(req.url, "http://local");
+  const keyQ = url.searchParams.get("key");
+  const keyH = req.headers["x-setup-secret"];
+  return keyQ === SECRET || keyH === SECRET;
+}
+
 module.exports = async (req, res) => {
+  // kalau tidak membawa secret yang benar -> pura-pura 404
+  if (!checkSecret(req)) {
+    res.status(404).json({ ok: false, error: "Not Found" });
+    return;
+  }
+
   try {
     const u = new URL(req.url, "http://local");
     const doMigrate = u.searchParams.get("do") === "1";
@@ -32,7 +48,7 @@ module.exports = async (req, res) => {
     }
 
     if (doMigrate || doFix) {
-      // ===== users (buat kalau belum ada) =====
+      // ===== USERS =====
       await q(`
         CREATE TABLE IF NOT EXISTS public.users (
           id           BIGINT PRIMARY KEY,
@@ -44,8 +60,7 @@ module.exports = async (req, res) => {
           updated_at   TIMESTAMPTZ
         )
       `);
-
-      // tambah kolom yang mungkin belum ada
+      await q(`ALTER TABLE public.users ALTER COLUMN id TYPE BIGINT`);
       await q(`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS tg_id TEXT`);
       await q(`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS username TEXT`);
       await q(`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS balance NUMERIC(14,2) DEFAULT 0`);
@@ -55,7 +70,7 @@ module.exports = async (req, res) => {
       await q(`UPDATE public.users SET balance=0 WHERE balance IS NULL`);
       await q(`UPDATE public.users SET streak =0 WHERE streak  IS NULL`);
 
-      // === FIX: jadikan users.id auto-increment kalau belum ada default ===
+      // FIX auto-increment id
       await q(`
         DO $$
         BEGIN
@@ -65,14 +80,13 @@ module.exports = async (req, res) => {
           ) THEN
             IF NOT EXISTS (
               SELECT 1 FROM pg_class c
-                JOIN pg_namespace n ON n.oid=c.relnamespace
+              JOIN pg_namespace n ON n.oid=c.relnamespace
               WHERE c.relkind='S' AND c.relname='users_id_seq' AND n.nspname='public'
             ) THEN
               CREATE SEQUENCE public.users_id_seq AS BIGINT START 1;
             END IF;
 
             ALTER TABLE public.users
-              ALTER COLUMN id TYPE BIGINT,
               ALTER COLUMN id SET DEFAULT nextval('public.users_id_seq');
 
             PERFORM setval('public.users_id_seq',
@@ -83,8 +97,6 @@ module.exports = async (req, res) => {
           END IF;
         END $$;
       `);
-
-      // pastikan PK & unique tg_id ada
       await q(`
         DO $$
         BEGIN
@@ -108,7 +120,7 @@ module.exports = async (req, res) => {
         END $$;
       `);
 
-      // ===== ad_sessions =====
+      // ===== AD_SESSIONS =====
       await q(`
         CREATE TABLE IF NOT EXISTS public.ad_sessions (
           id           BIGSERIAL PRIMARY KEY,
@@ -126,7 +138,7 @@ module.exports = async (req, res) => {
           ON public.ad_sessions (user_id, task_id, created_at DESC)
       `);
 
-      // ===== ledger =====
+      // ===== LEDGER =====
       await q(`
         CREATE TABLE IF NOT EXISTS public.ledger (
           id         BIGSERIAL PRIMARY KEY,
@@ -145,9 +157,8 @@ module.exports = async (req, res) => {
       return res.json({ ok: true, migrated: true, fixed: doFix });
     }
 
-    // default hint
-    res.json({ ok:true, hint: "Gunakan ?info=1 untuk info, ?do=1 untuk migrate, ?fix=1 untuk perbaikan id & ledger" });
+    res.json({ ok:true, hint: "Tambahkan ?info=1 / ?do=1 / ?fix=1 + secret" });
   } catch (e) {
-    return res.status(200).json({ ok:false, error: String(e?.message || e) });
+    res.status(200).json({ ok:false, error: String(e?.message || e) });
   }
 };
