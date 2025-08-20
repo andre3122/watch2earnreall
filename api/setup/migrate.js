@@ -1,75 +1,94 @@
-// api/setup/migrate.js — run once to create tables in the *actual* DATABASE_URL used by the app
+// api/setup/migrate.js — MIGRATE + INFO (gabungan, tanpa tambah file)
 const { sql } = require("../_lib/db");
-
-const MIGRATION = `
-create extension if not exists "uuid-ossp";
-
-create table if not exists users (
-  id           bigint primary key,
-  username     text,
-  first_name   text,
-  last_name    text,
-  balance      numeric not null default 0,
-  streak       int not null default 0,
-  last_checkin timestamptz,
-  address      text,
-  created_at   timestamptz not null default now(),
-  updated_at   timestamptz not null default now()
-);
-create index if not exists idx_users_updated_at on users(updated_at);
-
-create table if not exists ledger (
-  id         bigserial primary key,
-  user_id    bigint not null references users(id) on delete cascade,
-  amount     numeric not null,
-  reason     text not null,
-  ref_id     text,
-  created_at timestamptz not null default now()
-);
-create index if not exists idx_ledger_user on ledger(user_id);
-
-create table if not exists ad_sessions (
-  id           bigserial primary key,
-  user_id      bigint not null references users(id) on delete cascade,
-  task_id      text not null,
-  token        text not null unique,
-  reward       numeric not null default 0,
-  status       text not null default 'pending',
-  created_at   timestamptz not null default now(),
-  completed_at timestamptz
-);
-create index if not exists idx_ad_sessions_user on ad_sessions(user_id);
-create index if not exists idx_ad_sessions_status on ad_sessions(status);
-
-create table if not exists withdrawals (
-  id         bigserial primary key,
-  user_id    bigint not null references users(id) on delete cascade,
-  amount     numeric not null,
-  address    text not null,
-  status     text not null default 'pending',
-  created_at timestamptz not null default now()
-);
-create index if not exists idx_withdrawals_user on withdrawals(user_id);
-
-create or replace function touch_users_updated_at()
-returns trigger as $$
-begin
-  new.updated_at := now();
-  return new;
-end;
-$$ language plpgsql;
-
-drop trigger if exists trg_users_updated on users;
-create trigger trg_users_updated before update on users
-for each row execute function touch_users_updated_at();
-`;
 
 module.exports = async (req, res) => {
   try {
-    await sql.raw ? sql.raw(MIGRATION) : sql([MIGRATION], []); // support helper apapun
-    res.json({ ok: true });
+    // parse query (?do=1 / ?info=1)
+    const u = new URL(req.url, "http://local");
+    const doMigrate = u.searchParams.get("do") === "1";
+    const showInfo  = u.searchParams.get("info") === "1";
+
+    // mode INFO: cek DB yang dipakai + tabel yang ada
+    if (showInfo) {
+      const meta = await sql`
+        SELECT
+          current_database() AS db,
+          current_user       AS db_user,
+          inet_server_addr() AS server_ip,
+          inet_server_port() AS server_port,
+          version()          AS ver
+      `;
+      const tables = await sql`
+        SELECT table_name
+        FROM information_schema.tables
+        WHERE table_schema='public'
+          AND table_name IN ('users','ad_sessions','ledger')
+        ORDER BY table_name
+      `;
+      return res.json({
+        ok: true,
+        using_env: process.env.W2E_DB_URL ? "W2E_DB_URL" : "POSTGRES_URL",
+        db_info: meta[0],
+        has_tables: tables.map(t => t.table_name)
+      });
+    }
+
+    // mode MIGRATE: jalankan schema (idempotent, aman diulang)
+    if (doMigrate || req.method === "POST" || req.method === "GET") {
+      await sql`CREATE TABLE IF NOT EXISTS public.users (
+        id           BIGSERIAL PRIMARY KEY,
+        tg_id        TEXT UNIQUE NOT NULL,
+        username     TEXT,
+        balance      NUMERIC(14,2) NOT NULL DEFAULT 0,
+        streak       INT NOT NULL DEFAULT 0,
+        last_checkin TIMESTAMPTZ,
+        updated_at   TIMESTAMPTZ
+      )`;
+
+      // jaga2 kalau ada kolom yang belum ada
+      await sql`DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+          WHERE table_name='users' AND column_name='updated_at') THEN
+          ALTER TABLE public.users ADD COLUMN updated_at TIMESTAMPTZ;
+        END IF;
+      END $$;`;
+
+      await sql`CREATE TABLE IF NOT EXISTS public.ad_sessions (
+        id           BIGSERIAL PRIMARY KEY,
+        user_id      BIGINT NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+        task_id      TEXT NOT NULL,
+        token        TEXT,
+        reward       NUMERIC(14,2) NOT NULL DEFAULT 0,
+        status       TEXT NOT NULL DEFAULT 'pending',
+        created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+        completed_at TIMESTAMPTZ
+      )`;
+
+      await sql`CREATE INDEX IF NOT EXISTS ad_sessions_user_task_time_idx
+        ON public.ad_sessions (user_id, task_id, created_at DESC)`;
+
+      await sql`CREATE TABLE IF NOT EXISTS public.ledger (
+        id         BIGSERIAL PRIMARY KEY,
+        user_id    BIGINT NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+        amount     NUMERIC(14,2) NOT NULL,
+        reason     TEXT NOT NULL,
+        ref_id     TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )`;
+
+      await sql`CREATE INDEX IF NOT EXISTS ledger_user_time_idx
+        ON public.ledger (user_id, created_at DESC)`;
+
+      return res.json({ ok: true, migrated: true });
+    }
+
+    // default: kasih petunjuk
+    res.json({
+      ok: true,
+      hint: "Tambahkan ?do=1 untuk migrate, atau ?info=1 untuk info DB"
+    });
   } catch (e) {
-    console.error("migrate error:", e);
-    res.status(500).json({ ok:false, error: String(e) });
+    return res.status(200).json({ ok:false, error: String(e?.message || e) });
   }
 };
