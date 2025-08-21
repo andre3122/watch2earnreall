@@ -1,15 +1,14 @@
-/* Watch2EarnReall — app.js (EN, server-validated)
-   - Daily Check-in: 9 days (0.02 → 0.18), server validates & credits
-   - Tasks: server validate & credit + fancy reward popup
-   - Referral: "Refer & Earn Forever" (3 steps, Copy / TG / WA / Twitter/X, list + search)
-   - Top Toast: slim bar at top (Copy/Withdraw/Error/Info)
-   - Sends Telegram initData → server via header for auth
+/* Watch2EarnReall — app.js (LOCK task = $0.01, check-in progresif 0.02x)
+   Fokus perbaikan:
+   - Check-in tetap progresif: Day1=0.02, Day2=0.04, ...
+   - Task (watch ads) DIKUNCI $0.01 di client: label, request, dan toast
+   - Balance tetap ikut server kalau dikirim; tampilan (+$) di-toast dibatasi $0.01
+   - Tombol Claim check-in auto nonaktif & hilang setelah klaim
 */
 (() => {
   // ===== Telegram & API =====
   const tg = window.Telegram?.WebApp;
   tg?.ready?.(); try { tg?.expand?.(); } catch {}
-  const INIT = tg?.initData || ""; // sent to server in header
   const API = ""; // optional base path
 
   // ===== STATE =====
@@ -21,12 +20,15 @@
     tgUser: null,
   };
 
-  // ===== Check-in config (9 days, +0.02 per day) =====
+  // ===== KONFIG =====
+  // Check-in 9 hari: progresif 0.02 * hari
   const CHECKIN_DAYS = 9;
   const CHECKIN_REWARDS = Array.from({ length: CHECKIN_DAYS }, (_, i) =>
     Number(((i + 1) * 0.02).toFixed(2))
   );
-  let checkinSession = { token: null, done: false }; // reserved (client-side gate)
+
+  // Task reward fixed 0.01
+  const TASK_REWARD = 0.01;
 
   // ===== ELEM =====
   const els = {
@@ -39,31 +41,21 @@
     tabs: document.querySelectorAll(".tabbar .tab"),
     balance: document.getElementById("balance"),
 
-    // HOME
+    // HOME → Check-in
     checkinTiles:       document.getElementById("checkinTiles"),
     checkinProgressBar: document.getElementById("checkinProgressBar"),
     btnClaim:           document.getElementById("btnClaim"),
-    btnHomeRefer:       document.getElementById("btnHomeRefer"),
 
-    // REFERRAL (bound after inject)
-    refLink: null, btnCopyRef: null,
-    btnShareTG: null, btnShareWA: null, btnShareTW: null,
-    refCount: null, refList: null, refSearch: null,
+    // TASKS: label reward di UI (tambah data-reward-label di HTML kalau belum)
+    taskRewardLabels:   document.querySelectorAll("[data-reward-label]"),
 
-    // PROFILE / WITHDRAW / ADDRESS
-    profileAvatar:   document.getElementById("profileAvatar"),
-    profileName:     document.getElementById("profileName"),
-    withdrawForm:    document.getElementById("withdrawForm"),
-    withdrawAmount:  document.getElementById("withdrawAmount"),
-    addressForm:     document.getElementById("addressForm"),
-    bscAddress:      document.getElementById("bscAddress"),
+    profileName: document.getElementById("profileName"),
   };
 
   // ===== HELPERS =====
   function money(n) { return `$${Number(n).toFixed(2)}`; }
-  function setBalance(n) { state.balance = Number(n); if (els.balance) els.balance.textContent = money(state.balance); }
+  function setBalance(n) { state.balance = Number(n || 0); if (els.balance) els.balance.textContent = money(state.balance); }
 
-  // Browser fallback user (safe for local tests)
   function ensureUser() {
     if (!state.user || !state.user.id) {
       const saved = localStorage.getItem("demo_uid");
@@ -72,18 +64,14 @@
       state.user = { id: uid };
     }
   }
-
   function todayStr() {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
   }
 
-  // Persist lastCheckin & streak (optional fallback UX)
+  // Persist fallback
   function saveCheckin() {
-    try {
-      localStorage.setItem("lastCheckin", state.lastCheckin || "");
-      localStorage.setItem("streak", String(state.streak || 0));
-    } catch {}
+    try { localStorage.setItem("lastCheckin", state.lastCheckin || ""); localStorage.setItem("streak", String(state.streak||0)); } catch {}
   }
   function loadPersisted() {
     try {
@@ -94,20 +82,17 @@
     } catch {}
   }
 
-  // Fetch wrapper that sends Telegram initData or test header
+  // Fetch wrapper kirim auth Telegram / dummy dev
   async function safeFetch(path, options = {}) {
     const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
     const tgRaw = window.Telegram?.WebApp?.initData || "";
-
     if (tgRaw) {
-      headers["x-telegram-init-data"] = tgRaw; // Mini App prod
+      headers["x-telegram-init-data"] = tgRaw;
     } else {
-      // DEV: browser
       let uid = localStorage.getItem("demo_uid");
       if (!uid) { uid = String(Math.floor(Math.random()*9e9)+1e9); localStorage.setItem("demo_uid", uid); }
       headers["x-telegram-test-user"] = JSON.stringify({ id: uid, first_name: "Guest", username: "guest" });
     }
-
     const res = await fetch(path, { ...options, headers });
     let data = null;
     try { data = await res.json(); } catch {}
@@ -115,7 +100,7 @@
     return data || {};
   }
 
-  // ===== Top Toast (safe-area aware) =====
+  // ===== Top Toast =====
   let toastTimer = null;
   function injectToastStyles() {
     if (document.getElementById("topToastStyles")) return;
@@ -140,7 +125,7 @@
     const topPx = Math.max(8, inset || 0) + 8;
     document.documentElement.style.setProperty("--safe-top", `${topPx}px`);
   }
-  function toast(message, type="info") {
+  function toast(message) {
     injectToastStyles(); updateSafeTop();
     let el = document.getElementById("topToast");
     if (!el) { el = document.createElement("div"); el.id = "topToast"; el.innerHTML = `<span class="ticon">✔</span><span class="tmsg"></span>`; document.body.appendChild(el); }
@@ -150,12 +135,11 @@
     toastTimer = setTimeout(() => el.classList.remove("show"), 1600);
   }
 
-  // ===== HOME: CHECK-IN (9 days) =====
+  // ===== CHECK-IN =====
   function canClaimToday() {
     const today = todayStr();
     return state.lastCheckin !== today && state.streak < CHECKIN_DAYS;
   }
-
   function renderCheckinTiles() {
     if (!els.checkinTiles) return;
     const days = Array.from({ length: CHECKIN_DAYS }, (_, i) => i + 1);
@@ -171,8 +155,7 @@
     }).join("");
 
     if (els.checkinProgressBar) {
-      const pct = (state.streak / CHECKIN_DAYS) * 100;
-      els.checkinProgressBar.style.width = pct + "%";
+      els.checkinProgressBar.style.width = ((state.streak / CHECKIN_DAYS) * 100) + "%";
     }
 
     if (els.btnClaim) {
@@ -180,140 +163,110 @@
       els.btnClaim.disabled = !allowed;
       els.btnClaim.style.opacity = allowed ? "1" : ".65";
       els.btnClaim.style.pointerEvents = allowed ? "auto" : "none";
-      // Hide after claimed biar gak muncul terus
       els.btnClaim.style.display = allowed ? "" : "none";
       const span = els.btnClaim.querySelector("#claimText");
       if (span) span.textContent = allowed ? "Claim Bonus" : "Already checked-in";
     }
   }
-
-  // Client-side ad gate + server validation claim
   async function onClickClaimCheckin() {
-    if (!canClaimToday()) { toast("Already checked-in.", "error"); return; }
-
-    // 1) optional: tampilkan iklan
+    if (!canClaimToday()) { toast("Already checked-in."); return; }
     try {
-      const fn = window[window.MONETAG_FN];
-      if (typeof fn === "function") fn();
-    } catch {}
-
-    // 2) kemudian minta klaim ke server
-    await claimToday();
+      // Gate iklan (opsional)
+      try { const fn = window[window.MONETAG_FN]; if (typeof fn === "function") fn(); } catch {}
+      await claimToday();
+    } catch { toast("Failed to reach server."); }
   }
-
   async function claimToday() {
     try {
       const data = await safeFetch(`/api/checkin/claim`, { method: "POST", body: JSON.stringify({}) });
       if (data?.ok) {
-        // Update streak; fallback ++ jika server tidak kirim
-        if (typeof data.streak === "number") {
-          state.streak = data.streak;
-        } else {
-          state.streak = Math.min(state.streak + 1, CHECKIN_DAYS);
-        }
-        // Pastikan lastCheckin ditandai hari ini
+        state.streak = typeof data.streak === "number" ? data.streak : Math.min(state.streak + 1, CHECKIN_DAYS);
         state.lastCheckin = todayStr();
         saveCheckin();
         if (typeof data.balance === "number") setBalance(data.balance);
+        const amt = (data && data.amount != null) ? Number(data.amount) : CHECKIN_REWARDS[Math.max(0, state.streak-1)];
         renderCheckinTiles();
-        toast(`Check-in successful! +$${Number(data.amount||0).toFixed(2)}`, "success");
+        toast(`Check-in successful! +$${amt.toFixed(2)}`);
       } else {
-        toast(data?.error || "Check-in failed.", "error");
+        toast(data?.error || "Check-in failed.");
       }
-    } catch (e) {
-      toast("Failed to reach server.", "error");
-    }
+    } catch { toast("Failed to reach server."); }
   }
 
-  // ===== TASKS (server-validated + reward popup) =====
+  // ===== TASKS (WATCH ADS) — reward fixed $0.01 =====
+  function paintTaskRewardLabels() {
+    if (!els.taskRewardLabels) return;
+    els.taskRewardLabels.forEach(el => { el.textContent = money(TASK_REWARD); });
+  }
+
   function initTasks() {
+    paintTaskRewardLabels();
+
     document.querySelectorAll(".task-card .btn-cta[data-action='watch']").forEach(btn => {
       if (btn.__bound) return; btn.__bound = true;
+
       btn.addEventListener("click", async () => {
         try {
-          const taskId = btn.closest(".task-card")?.dataset?.taskId;
+          const card = btn.closest(".task-card");
+          const taskId = card?.dataset?.taskId;
           if (!taskId) return;
 
+          // Tampilkan iklan (kalau ada)
           try { const fn = window[window.MONETAG_FN]; if (typeof fn === "function") fn(); } catch {}
 
-          // 1) Start server session
+          // 1) Start session — MINTA reward 0.01
           const start = await safeFetch(`/api/task/create`, {
             method: "POST",
-            body: JSON.stringify({ task_id: taskId })
+            body: JSON.stringify({ task_id: taskId, reward: TASK_REWARD })
           });
-          if (!start?.ok || !start.token) return toast(start?.error || "Gagal mulai task.", "error");
+          if (!start?.ok || !start.token) return toast(start?.error || "Gagal mulai task.");
 
           const token = start.token;
           const waitSec = Number(start.wait_seconds || 16);
 
-          // 2) Wait X seconds
+          // 2) Tunggu X detik (simulasi nonton)
           await new Promise(r => setTimeout(r, waitSec * 1000));
 
-          // 3) Try complete
+          // 3) Complete + credit
           async function tryComplete() {
             const data = await safeFetch(`/api/reward/complete`, {
               method: "POST",
-              body: JSON.stringify({ task_id: taskId, token })
+              body: JSON.stringify({ task_id: taskId, token, reward: TASK_REWARD })
             });
+
             if (data?.credited) {
               btn.disabled = true;
-              setBalance(data.balance ?? state.balance);
-              toast(`+$${Number(data.amount || 0).toFixed(2)}`, "success");
+
+              // Tampilan (+$) dibatasi max 0.01
+              const credited = (typeof data.amount === "number")
+                ? Math.min(Number(data.amount), TASK_REWARD)
+                : TASK_REWARD;
+
+              // Update balance: pakai angka server kalau ada; kalau tidak, tambah lokal
+              if (typeof data.balance === "number") {
+                setBalance(data.balance);
+              } else {
+                setBalance(state.balance + credited);
+              }
+
+              toast(`+$${credited.toFixed(2)}`);
               return;
             }
+
             if (data?.awaiting && data.wait_seconds > 0) {
               await new Promise(r => setTimeout(r, Number(data.wait_seconds) * 1000));
               return tryComplete();
             }
-            toast(data?.error || "Verification failed.", "error");
+            toast(data?.error || "Verification failed.");
           }
+
           await tryComplete();
-        } catch { toast("Failed to reach server.", "error"); }
+        } catch { toast("Failed to reach server."); }
       });
     });
   }
 
-  // ===== REFERRAL: Inject UI (dipertahankan) =====
-  function injectReferralStyles() {
-    if (document.getElementById("referralStyles")) return;
-    const style = document.createElement("style");
-    style.id = "referralStyles";
-    style.textContent = `
-      .ref-hero{ padding:16px; border-radius:18px; }
-      .ref-hero-head{ display:flex; align-items:center; justify-content:space-between; }
-      .ref-badge{ padding:6px 10px; border-radius:12px; background:#1e293b; color:#e5f2ff; font-weight:700 }
-      .ref-actions{ display:flex; flex-wrap:wrap; gap:8px; margin-top:8px }
-      .ref-actions .btn{ border:1px solid rgba(255,255,255,.12); border-radius:10px; padding:8px 10px }
-    `;
-    document.head.appendChild(style);
-  }
-  function injectReferralUI() {
-    // (konten referral sudah ada di HTML; bagian ini dibiarkan)
-  }
-  function bindReferralEls() {
-    // (binding tombol share/copy—dibiarkan atau sesuaikan)
-  }
-  function setReferralLink() {
-    // (generate link referal—dibiarkan)
-  }
-  function initReferralButtons() {
-    // (share handler—dibiarkan)
-  }
-
-  // ===== PROFILE / WITHDRAW / ADDRESS (dibiarkan) =====
-  function initWithdrawForm() {}
-  function initAddressForm() {}
-
-  // ===== NAV =====
-  function setScreen(name) {
-    Object.entries(els.screens).forEach(([k, el]) => el?.classList.toggle("active", k === name));
-    els.tabs.forEach(tab => tab.classList.toggle("active", tab.dataset.target === name));
-  }
-  function initTabs() {
-    els.tabs.forEach(tab => tab.addEventListener("click", () => setScreen(tab.dataset.target)));
-  }
-
-  // ===== SERVER USER SYNC (FIX: pakai nested data.user) =====
+  // ===== USER SYNC =====
   async function syncUser() {
     try {
       const data = await safeFetch(`/api/user/get`);
@@ -330,10 +283,15 @@
         state.lastCheckin = todayStr();
       }
       renderCheckinTiles();
-    } catch { /* ignore */ }
+    } catch {}
   }
 
-  // ===== INIT =====
+  // ===== NAV + PROFILE =====
+  function setScreen(name) {
+    Object.entries(els.screens).forEach(([k, el]) => el?.classList.toggle("active", k === name));
+    els.tabs.forEach(tab => tab.classList.toggle("active", tab.dataset.target === name));
+  }
+  function initTabs() { els.tabs.forEach(tab => tab.addEventListener("click", () => setScreen(tab.dataset.target))); }
   function setProfile() {
     try {
       const u = window.Telegram?.WebApp?.initDataUnsafe?.user;
@@ -342,37 +300,24 @@
     } catch {}
   }
 
+  // ===== INIT =====
   function init() {
     ensureUser();
     loadPersisted();
     setProfile();
     setBalance(state.balance);
-
     injectToastStyles(); updateSafeTop();
     window.addEventListener("resize", updateSafeTop);
     window.Telegram?.WebApp?.onEvent?.("viewportChanged", updateSafeTop);
 
-    // Referral area (tidak diubah UI-nya)
-    injectReferralStyles(); injectReferralUI(); bindReferralEls(); setReferralLink();
-
-    // HOME
     renderCheckinTiles();
     els.btnClaim?.addEventListener("click", onClickClaimCheckin);
 
-    // NAV/REF/TASK/FORM
-    initTabs(); initReferralButtons(); initTasks(); initWithdrawForm(); initAddressForm();
-
-    // Data
+    initTabs();
+    initTasks();
     syncUser();
 
-    // Theme
     document.body.dataset.tg = tg?.colorScheme || "light";
-
-    // Home → referral shortcut
-    els.btnHomeRefer?.addEventListener?.("click", () => {
-      document.querySelector('.tab[data-target="referral"]')?.click();
-    });
   }
-
   init();
 })();
