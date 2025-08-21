@@ -1,14 +1,16 @@
-/* Watch2EarnReall — app.js (NO CHECK-IN, server-validated TASK=0.01)
-   - Check-in: DIHAPUS (UI/logic dimatikan)
-   - Tasks: server validate & credit (UI toast tampil +$0.01), saldo ikut server
-   - Referral/Withdraw/Profile: tetap seperti semula (nggak diutak-atik)
-   - Telegram initData dikirim via header untuk auth
+/* Watch2EarnReall — app.js (FINAL)
+   - CHECK-IN: REMOVED (UI + logic dimatikan total)
+   - TASKS (watch ads): server-validated, UI toast +$0.01, saldo ikut server
+   - REFERRAL, WITHDRAW, PROFILE, TABS: tetap berjalan seperti sebelumnya
+   - Telegram initData dikirim via header untuk auth (prod); fallback dev header di browser
 */
+
 (() => {
   // ===== Telegram & API =====
   const tg = window.Telegram?.WebApp;
   tg?.ready?.(); try { tg?.expand?.(); } catch {}
-  const API = ""; // optional base path
+  // Jika backend kamu beda origin (Railway dsb), isi base URL di sini:
+  const API = ""; // contoh: "https://your-backend.railway.app"
 
   // ===== STATE =====
   const state = {
@@ -42,13 +44,13 @@
   };
 
   // ===== CONFIG =====
-  const TASK_REWARD = 0.01; // UI hanya tampilkan ini; saldo tetap ikut server
+  const TASK_REWARD = 0.01; // UI display only; server tetap sumber kebenaran
 
   // ===== HELPERS =====
   function money(n){ return `$${Number(n).toFixed(2)}`; }
   function setBalance(n){ state.balance = Number(n||0); if (els.balance) els.balance.textContent = money(state.balance); }
 
-  // fallback user untuk dev (non-telegram web)
+  // Fallback user untuk dev (non-telegram web)
   function ensureUser(){
     if (!state.user || !state.user.id) {
       const saved = localStorage.getItem("demo_uid");
@@ -58,18 +60,20 @@
     }
   }
 
-  // Fetch wrapper (kirim header Telegram/test)
+  // Fetch wrapper (kirim header Telegram / test)
   async function safeFetch(path, options = {}){
     const headers = { "Content-Type": "application/json", ...(options.headers||{}) };
     const tgRaw = window.Telegram?.WebApp?.initData || "";
     if (tgRaw) {
-      headers["x-telegram-init-data"] = tgRaw;
+      headers["x-telegram-init-data"] = tgRaw; // PROD
     } else {
+      // DEV fallback (browser)
       let uid = localStorage.getItem("demo_uid");
       if (!uid){ uid = String(Math.floor(Math.random()*9e9)+1e9); localStorage.setItem("demo_uid", uid); }
       headers["x-telegram-test-user"] = JSON.stringify({ id: uid, first_name: "Guest", username: "guest" });
     }
-    const res  = await fetch(path, { ...options, headers });
+    const url = (API ? API : "") + path;
+    const res  = await fetch(url, { ...options, headers });
     let data = null; try { data = await res.json(); } catch {}
     if (!res.ok) throw new Error((data && (data.error || data.message)) || `HTTP ${res.status}`);
     return data || {};
@@ -118,16 +122,18 @@
     toastTimer = setTimeout(()=> el.classList.remove("show"), 1600);
   }
 
-  // ===== Matikan & sembunyikan UI CHECK-IN =====
+  // ===== Hapus CHECK-IN (UI + logic) =====
   function killCheckinUI(){
-    // hapus tombol/tiles/bar bila ada
+    // Bersihkan elemen umum check-in bila masih ada
     ["btnClaim","checkinTiles","checkinProgressBar","btnHomeRefer"].forEach(id=>{
       const el = document.getElementById(id);
       if (el) el.remove();
     });
-    // coba hapus card/section umum
+    // Hapus section/card check-in bila ada
     const sec = document.querySelector('[data-section="checkin"], .checkin-section, #section-checkin');
     if (sec) sec.remove();
+    // Netralisir handler global lama jika ada
+    window.onClickClaimCheckin = function(){ return false; };
   }
 
   // ===== TASKS (WATCH ADS) — reward UI 0.01, saldo ikut server =====
@@ -147,10 +153,10 @@
           const taskId = card?.dataset?.taskId;
           if (!taskId) return;
 
-          // (opsional) tampilkan iklan
+          // (opsional) panggil iklan
           try { const fn = window[window.MONETAG_FN]; if (typeof fn === "function") fn(); } catch {}
 
-          // 1) start session (kita kirim reward=0.01, tapi server yang mutusin)
+          // 1) start session — client minta 0.01 (server yang mutusin)
           const start = await safeFetch(`/api/task/create`, {
             method: "POST",
             body: JSON.stringify({ task_id: taskId, reward: TASK_REWARD })
@@ -173,13 +179,13 @@
             if (data?.credited){
               btn.disabled = true;
 
-              // UI tampilkan +$0.01 (cap tampilan); saldo SELALU ikut server
+              // UI: tampilkan +$0.01 (hanya tampilan). Saldo SELALU ikut server.
               toast(`+$${TASK_REWARD.toFixed(2)}`, "success");
 
               if (typeof data.balance === "number") {
                 setBalance(data.balance);
               } else {
-                await syncUser();
+                await syncUser(); // tarik dari server jika balance tidak dikirim
               }
               return;
             }
@@ -197,7 +203,7 @@
     });
   }
 
-  // ===== REFERRAL (ringan, nggak disentuh logic earning-nya) =====
+  // ===== REFERRAL / PROFILE / WITHDRAW (tidak diubah logic earning) =====
   function setProfile(){
     try{
       const u = window.Telegram?.WebApp?.initDataUnsafe?.user;
@@ -208,7 +214,6 @@
     } catch {}
   }
 
-  // ===== WITHDRAW / ADDRESS =====
   function initWithdrawForm(){
     els.withdrawForm?.addEventListener("submit", async (e)=>{
       e.preventDefault();
@@ -221,6 +226,7 @@
       } catch { toast("Failed to reach server.", "error"); }
     });
   }
+
   function initAddressForm(){
     els.addressForm?.addEventListener("submit", async (e)=>{
       e.preventDefault();
@@ -256,11 +262,12 @@
     setProfile();
     setBalance(state.balance);
 
+    // Toast & safe area
     injectToastStyles(); updateSafeTop();
     window.addEventListener("resize", updateSafeTop);
     window.Telegram?.WebApp?.onEvent?.("viewportChanged", updateSafeTop);
 
-    // Matikan check-in
+    // Matikan CHECK-IN
     killCheckinUI();
 
     // NAV / TASKS / FORMS
@@ -277,9 +284,9 @@
   }
 
   // Ekspor helper bila perlu dipakai patch lain
-  window.safeFetch = safeFetch;
+  window.safeFetch  = safeFetch;
   window.setBalance = setBalance;
-  window.syncUser = syncUser;
+  window.syncUser   = syncUser;
 
   init();
 })();
