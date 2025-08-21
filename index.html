@@ -529,6 +529,54 @@
   }
 })();
 </script>
+<style>
+/* Warna biru terang untuk tombol Submit Withdraw */
+#btnWithdrawProxy{
+  background: linear-gradient(90deg, #12d8fa, #00c6ff);
+  color: #fff !important;
+  border: none;
+  font-weight: 600;
+  box-shadow: 0 8px 24px rgba(0,198,255,.35);
+}
+#btnWithdrawProxy:active{ transform: translateY(1px); }
+#btnWithdrawProxy:disabled{ opacity: .65; }
+</style>
+
+<script>
+/* PATCH: Gabungkan dua card (withdraw + address) jadi satu & styling tombol biru */
+(function () {
+  const wForm = document.getElementById('withdrawForm');
+  const aForm = document.getElementById('addressForm');
+  if (!wForm || !aForm) return;
+
+  // 1) Gabungkan card: pindahkan addressForm ke dalam card yang sama dgn withdrawForm
+  const wCard = wForm.closest('.glass.card');
+  const aCard = aForm.closest('.glass.card');
+  if (wCard && aCard && aCard !== wCard) {
+    // beri jarak sedikit
+    aForm.style.marginTop = '16px';
+    wCard.appendChild(aForm);     // addressForm sekarang di card yang sama
+    aCard.remove();               // hapus card kosong
+  }
+
+  // 2) Pindahkan fungsi submit withdraw ke tombol bawah & sembunyikan tombol submit asli (atas)
+  const wBtn = wForm.querySelector('button[type="submit"]');
+  if (wBtn) wBtn.style.display = 'none';
+
+  const aBtn = aForm.querySelector('button[type="submit"]') || aForm.querySelector('button');
+  if (!aBtn) return;
+
+  // ubah tombol bawah jadi proxy submit withdraw
+  aBtn.textContent = 'Submit Withdraw';
+  aBtn.type = 'button';
+  aBtn.id = 'btnWithdrawProxy';
+  aBtn.onclick = function(){
+    if (wForm.reportValidity && !wForm.reportValidity()) return;
+    if (wForm.requestSubmit) wForm.requestSubmit();
+    else wForm.submit();
+  };
+})();
+</script>
 
   <script src="./app.js" defer></script>
 </body>
