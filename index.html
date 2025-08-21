@@ -502,6 +502,33 @@
   });
 })();
 </script>
+<script>
+/* PATCH: Pindahkan aksi "Submit Withdraw" ke tombol bawah (ganti "Simpan Alamat") */
+(function () {
+  const wForm  = document.getElementById('withdrawForm'); // form atas
+  const aForm  = document.getElementById('addressForm');  // form bawah
+  if (!wForm || !aForm) return;
+
+  // Sembunyikan tombol submit asli di form withdraw (biar tidak ada dua tombol)
+  const wBtn = wForm.querySelector('button[type="submit"]');
+  if (wBtn) wBtn.style.display = 'none';
+
+  // Ubah tombol bawah jadi "Submit Withdraw" dan arahkan untuk submit form withdraw
+  const aBtn = aForm.querySelector('button[type="submit"]');
+  if (aBtn) {
+    aBtn.textContent = 'Submit Withdraw'; // ganti label
+    aBtn.type = 'button';                  // cegah submit ke form alamat
+    aBtn.id = 'btnWithdrawProxy';
+    aBtn.addEventListener('click', function () {
+      // Validasi form withdraw jika ada atribut required di dalamnya
+      if (wForm.reportValidity && !wForm.reportValidity()) return;
+      // Submit form withdraw (mendukung browser lama & baru)
+      if (wForm.requestSubmit) wForm.requestSubmit();
+      else wForm.submit();
+    });
+  }
+})();
+</script>
 
   <script src="./app.js" defer></script>
 </body>
