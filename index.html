@@ -475,5 +475,211 @@
   </style>
 
   <script src="./app.js" defer></script>
+  <style>
+/* ==== Smooth Check-in UI ==== */
+#btnClaim{ position:relative; transition:transform .12s ease, opacity .2s ease; }
+#btnClaim:active{ transform:scale(.98); }
+#btnClaim.is-claimed{ opacity:.75; pointer-events:none; }
+#btnClaim.is-loading{ pointer-events:none; }
+#btnClaim.is-loading .gift{ opacity:0; }
+#btnClaim.is-loading::after{
+  content:""; position:absolute; right:12px; top:50%; width:16px; height:16px; margin-top:-8px;
+  border:2px solid rgba(255,255,255,.5); border-top-color:#fff; border-radius:50%;
+  animation: w2e-spin 700ms linear infinite;
+}
+@keyframes w2e-spin{ to{ transform:rotate(360deg); } }
+
+.checkin-progress{ overflow:hidden; }
+.checkin-progress-bar{
+  width:0%; height:6px; border-radius:999px;
+  transition: width .5s ease;
+}
+
+/* Tile anim */
+.checkin-tiles{ display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+.tile{ position:relative; padding:10px; border-radius:12px; text-align:center; transition:transform .25s ease, background .25s ease, box-shadow .25s ease; }
+.tile.current{ box-shadow:0 0 0 2px rgba(18,216,250,.45) inset; }
+.tile.claimed{ background:rgba(18,216,250,.12); }
+.tile.claiming{ transform:scale(1.03); box-shadow:0 6px 24px rgba(18,216,250,.25); }
+.tile .tick{ position:absolute; right:8px; top:8px; font-size:14px; opacity:.95; }
+</style>
+
+<script>
+/* ==== FINAL SMOOTH CHECK-IN (after app.js) ==== */
+(function(){
+  const KEY_DAY='w2e-last-checkin-date';
+  const KEY_STREAK='w2e-streak';
+  const SCHEDULE=["0.02","0.04","0.06","0.08","0.10","0.12","0.14","0.16","0.18"];
+  const btn=document.getElementById('btnClaim');
+  const txt=document.getElementById('claimText');
+  const balEl=document.getElementById('balance');
+  const tilesEl=document.getElementById('checkinTiles');
+  const barEl=document.getElementById('checkinProgressBar');
+
+  const haptic = (t='soft') => { try{ Telegram?.WebApp?.HapticFeedback?.impactOccurred(t); }catch{} };
+  const toast  = (m) => { try{ Telegram?.WebApp?.showAlert(m);}catch{ alert(m);} };
+  const today  = () => new Date().toISOString().slice(0,10);
+  const sleep  = (ms)=> new Promise(r=>setTimeout(r,ms));
+
+  function percent(streak){ const s=Math.max(0, Math.min(9, Number(streak||0))); return (s/9)*100; }
+
+  function renderTiles(streak){
+    const done=Number(streak||0);
+    let html='';
+    for(let i=1;i<=9;i++){
+      const amount=SCHEDULE[i-1];
+      const claimed=i<=done;
+      const cls= claimed ? 'tile claimed' : (i===Math.min(done+1,9)?'tile current':'tile locked');
+      html+=`<div class="${cls}" data-day="${i}">
+               <div class="day">Day ${i}</div>
+               <div class="amt">${amount}</div>
+               ${claimed?'<div class="tick">✔</div>':''}
+             </div>`;
+    }
+    tilesEl&&(tilesEl.innerHTML=html);
+    if (barEl) barEl.style.width = percent(done)+'%';
+  }
+
+  function lockBtn(){
+    if(!btn) return;
+    btn.disabled=true;
+    btn.classList.add('is-claimed');
+    btn.classList.remove('is-loading');
+    if(txt) txt.textContent='Already claimed';
+  }
+  function setLoading(v){
+    if(!btn) return;
+    btn.classList.toggle('is-loading', !!v);
+    btn.disabled = !!v;
+    if (txt) txt.textContent = v ? 'Claiming…' : 'Claim Bonus';
+  }
+  function unlockBtn(){
+    if(!btn) return;
+    btn.disabled=false;
+    btn.classList.remove('is-claimed','is-loading');
+    if(txt) txt.textContent='Claim Bonus';
+  }
+
+  async function countUp(el, from, to, dur=600){
+    from=Number(from||0); to=Number(to||0);
+    if(!el || !isFinite(from) || !isFinite(to) || from===to){ el.textContent = `$${to.toFixed(2)}`; return; }
+    const start=performance.now();
+    function step(now){
+      const p=Math.min(1, (now-start)/dur);
+      const val=from + (to-from)*(p<.5 ? 2*p*p : -1+(4-2*p)*p); // easeInOutQuad
+      el.textContent = `$${val.toFixed(2)}`;
+      if(p<1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  }
+
+  // 1) Anti-flicker: apply cache dulu
+  (function applyCache(){
+    try{
+      const d=localStorage.getItem(KEY_DAY);
+      const s=Number(localStorage.getItem(KEY_STREAK)||0);
+      renderTiles(s);
+      if (d===today()) lockBtn(); else { if (btn){ btn.disabled=true; if(txt) txt.textContent='Checking…'; } }
+    }catch{}
+  })();
+
+  // 2) Sync server
+  (async function syncServer(){
+    try{
+      const r = await fetch('/api/user/get');
+      const j = await r.json();
+      if (!j?.ok) return;
+
+      if (balEl && j.user && j.user.balance!=null){
+        balEl.textContent = `$${Number(j.user.balance).toFixed(2)}`;
+      }
+      const lastISO = j.user?.last_checkin ? String(j.user.last_checkin).slice(0,10) : null;
+      const already = Boolean(j.user?.checkin_today) || (lastISO===today());
+      const streak  = Number(j.user?.streak || 0);
+
+      renderTiles(streak);
+
+      if (already){
+        localStorage.setItem(KEY_DAY, today());
+        localStorage.setItem(KEY_STREAK, String(streak));
+        lockBtn();
+      }else{
+        unlockBtn();
+      }
+
+      // update referral %
+      const rp=Number(j.ref_percent||10);
+      const badge=document.querySelector('.ref-badge'); if (badge) badge.textContent=`${rp}%`;
+      const home=document.querySelector('.home-ref-card .muted'); if (home) home.textContent=`Get ${rp}% of their earnings`;
+      const hero=document.querySelector('.ref-hero p.muted'); if (hero) hero.innerHTML=`Earn <strong>${rp}%</strong> of your friends earnings for life!`;
+    }catch{}
+  })();
+
+  // 3) Klik cekin (smooth sequence)
+  if (btn && !btn.__smooth){
+    btn.addEventListener('click', async (e)=>{
+      if (btn.disabled) return;
+      e.preventDefault();
+      setLoading(true);
+      haptic('light');
+
+      try{
+        const r = await fetch('/api/checkin/claim',{ method:'POST' });
+        const j = await r.json();
+
+        if (!j.ok){
+          setLoading(false);
+          return toast(j.error || 'Claim failed');
+        }
+
+        // Anim tile: tandai hari ini
+        const serverStreak = Number(j.streak || j.day || 0);
+        const todayIdx = Math.min(serverStreak,9);
+        const tile = tilesEl?.querySelector(`.tile[data-day="${todayIdx}"]`);
+        if (tile){
+          tile.classList.add('claiming');
+          await sleep(180);
+          tile.classList.remove('claiming');
+          tile.classList.add('claimed');
+          if (!tile.querySelector('.tick')){
+            const t = document.createElement('div'); t.className='tick'; t.textContent='✔'; tile.appendChild(t);
+          }
+        }
+
+        // Progress bar anim
+        if (barEl){ barEl.style.width = percent(serverStreak)+'%'; }
+
+        // Balance count-up
+        const current = balEl ? Number((balEl.textContent||'').replace(/[^0-9.]/g,'')) : 0;
+        if (balEl && j.balance!=null){
+          await countUp(balEl, current, Number(j.balance), 700);
+        }
+
+        // Lock & cache
+        localStorage.setItem(KEY_DAY, today());
+        localStorage.setItem(KEY_STREAK, String(serverStreak));
+        lockBtn();
+        haptic('soft');
+
+      }catch(err){
+        setLoading(false);
+        toast('Failed to reach server');
+      }
+    }, {capture:true});
+    btn.__smooth = true;
+  }
+
+  // 4) Hard-lock observer: kalau ada script lain ubah state tombol, kunci lagi
+  if (btn && !btn.__obs){
+    const obs=new MutationObserver(()=>{
+      try{
+        if (localStorage.getItem(KEY_DAY)===today()) lockBtn();
+      }catch{}
+    });
+    obs.observe(btn,{ attributes:true, attributeFilter:['disabled','class','aria-disabled'] });
+    btn.__obs=obs;
+  }
+})();
+</script>
 </body>
 </html>
