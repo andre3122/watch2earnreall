@@ -1,229 +1,287 @@
-<!doctype html>
-<html lang="en" class="scroll-smooth">
-<head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
-  <title>Watch2EarnReall — Telegram Mini App</title>
-  <meta name="theme-color" content="#12d8fa"/>
-  <meta name="color-scheme" content="light only"/>
+/* Watch2EarnReall — app.js (cek-in dihapus → follow channels; task ads tetap 0.01 server) */
+(() => {
+  // ===== Telegram & API =====
+  const tg = window.Telegram?.WebApp;
+  tg?.ready?.(); try { tg?.expand?.(); } catch {}
+  const API = ""; // isi jika backend beda origin
 
-  <!-- Telegram Mini App SDK -->
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  // ===== STATE =====
+  const state = {
+    user: tg?.initDataUnsafe?.user || null,
+    balance: 0.00,
+    address: localStorage.getItem("bsc_address") || "",
+    followDone: new Set(),
+  };
 
-  <!-- Monetag Mini App SDK (SET sesuai projectmu) -->
-  <script src="//libtl.com/sdk.js" data-zone="9726748" data-sdk="show_9726748"></script>
+  // ===== ELEMENTS =====
+  const els = {
+    screens: {
+      home:      document.getElementById("screen-home"),
+      task:      document.getElementById("screen-task"),
+      referral:  document.getElementById("screen-referral"),
+      profile:   document.getElementById("screen-profile"),
+    },
+    tabs: document.querySelectorAll(".tabbar .tab"),
+    balance: document.getElementById("balance"),
 
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    // FOLLOW (ganti cek-in)
+    followList: document.getElementById("followList"),
 
-  <style>
-    :root{
-      --bg: #0b1220; --card: #0f172a; --soft: #0b1220;
-      --line: #1f2937; --muted: #94a3b8; --text: #e5f2ff;
-      --brand1: #12d8fa; --brand2: #6a32c9; --brand3: #a78bfa;
-      --ok: #10b981; --err: #ef4444;
+    // TASKS
+    taskRewardLabels: document.querySelectorAll("[data-reward-label]"),
+
+    // PROFILE / WITHDRAW / ADDRESS
+    profileAvatar:   document.getElementById("profileAvatar"),
+    profileName:     document.getElementById("profileName"),
+    profileUsername: document.getElementById("profileUsername"),
+    withdrawForm:    document.getElementById("withdrawForm"),
+    withdrawAmount:  document.getElementById("withdrawAmount"),
+    addressForm:     document.getElementById("addressForm"),
+    bscAddress:      document.getElementById("bscAddress"),
+  };
+
+  const TASK_REWARD = 0.01;
+  const FOLLOW_CHANNELS = Array.isArray(window.FOLLOW_CHANNELS) ? window.FOLLOW_CHANNELS : [];
+
+  // ===== HELPERS =====
+  function money(n){ return `$${Number(n).toFixed(2)}`; }
+  function setBalance(n){ state.balance = Number(n||0); if (els.balance) els.balance.textContent = money(state.balance); }
+  function ensureUser(){
+    if (!state.user || !state.user.id) {
+      const saved = localStorage.getItem("demo_uid");
+      const uid   = saved || String(Math.floor(100000 + Math.random() * 900000));
+      if (!saved) localStorage.setItem("demo_uid", uid);
+      state.user = { id: uid, first_name: "Guest", username: "guest" };
     }
-    *{ box-sizing:border-box }
-    html,body{ height:100% }
-    body{
-      margin:0; background: radial-gradient(160% 140% at 50% 0%, #102345 0%, #0b1220 60%, #0b1220 100%);
-      color:var(--text);
-      font-family: "Outfit", ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial;
-      -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+  }
+  async function safeFetch(path, options={}){
+    const headers = { "Content-Type":"application/json", ...(options.headers||{}) };
+    const init = window.Telegram?.WebApp?.initData || "";
+    if (init) headers["x-telegram-init-data"] = init;
+    else {
+      let uid = localStorage.getItem("demo_uid");
+      if (!uid){ uid = String(Math.floor(Math.random()*9e9)+1e9); localStorage.setItem("demo_uid", uid); }
+      headers["x-telegram-test-user"] = JSON.stringify({ id: uid, first_name:"Guest", username:"guest" });
     }
-    .app{ max-width:760px; margin:0 auto; padding:16px 16px 90px }
-    .app-header{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
-    .brand{ display:flex; align-items:center; gap:10px; position:relative }
-    .logo-glow{ width:16px; height:16px; border-radius:999px; background: radial-gradient(100% 100% at 50% 30%, var(--brand1), #6ee7f7); box-shadow: 0 0 20px rgba(18,216,250,.6), 0 0 40px rgba(106,50,201,.3) }
-    .brand-title{ font-weight:1000; letter-spacing:.3px; }
-    .brand-title .accent{ color:#a78bfa }
-    .coins{ background:#0f172a; border:1px solid var(--line); padding:8px 12px; border-radius:12px; font-weight:900 }
-    .section-title{ margin:16px 0 8px; display:flex; align-items:center; justify-content:space-between; }
-    .muted{ color:var(--muted) }
+    const res = await fetch((API||"")+path, { ...options, headers });
+    let data=null; try{ data=await res.json(); }catch{}
+    if (!res.ok) throw new Error((data && (data.error||data.message)) || `HTTP ${res.status}`);
+    return data || {};
+  }
 
-    .tabs{ display:grid; grid-template-columns: repeat(4,1fr); gap:8px; }
-    .tab{ background:#0f172a; border:1px solid var(--line); color:#cbd5e1; border-radius:10px; padding:8px; text-align:center; cursor:pointer; font-weight:800 }
-    .tab.active{ color:#fff; border-color:#334155; outline:2px solid #1e293b }
-
-    .screen{ display:none }
-    .screen.active{ display:block }
-
-    .home-hero{
-      border-radius:16px; padding:14px; background:linear-gradient(150deg, rgba(18,216,250,.08), rgba(167,139,250,.06), rgba(16,185,129,.05));
-      border:1px solid rgba(255,255,255,.08)
+  // ===== Toast (pakai gaya tipis) =====
+  let toastTimer=null;
+  function toast(msg,type="success"){
+    let el=document.getElementById("topToast");
+    if(!el){
+      const s=document.createElement("style"); s.textContent=`
+      #topToast{position:fixed;top:16px;left:50%;transform:translateX(-50%);background:#111827;color:#e5f2ff;
+      border:1px solid #1f2937;border-radius:999px;padding:10px 14px;font-weight:800;z-index:99999;opacity:.98}`;
+      document.head.appendChild(s);
+      el=document.createElement("div"); el.id="topToast"; el.style.display="none"; document.body.appendChild(el);
     }
+    el.textContent=msg; el.style.display="block"; clearTimeout(toastTimer);
+    toastTimer=setTimeout(()=>{ el.style.display="none"; },1600);
+  }
 
-    .card{ border-radius:16px; padding:14px; background: #0f172a; border: 1px solid var(--line); }
-
-    .btn{ border:1px solid var(--line); background:#0f172a; color:#e5f2ff; border-radius:12px; padding:10px 14px; font-weight:800; cursor:pointer }
-    .btn-cta{ background:linear-gradient(90deg, #12d8fa, #6a32c9); border:none; color:#062d1a; font-weight:1000 }
-    .pill{ border-radius:999px; padding:6px 10px; border:1px solid var(--line); background:#0b1220; color:#9db5ff; font-weight:900 }
-
-    .tasks-list{ display:grid; gap:10px; margin-top:6px }
-    .task-card{ display:flex; align-items:center; justify-content:space-between; gap:10px; border-radius:16px; padding:14px; background:#0f172a; border:1px solid var(--line) }
-    .task-left{ display:flex; align-items:center; gap:12px; }
-    .task-icon{ width:42px; height:42px; border-radius:12px; display:grid; place-items:center; background:linear-gradient(135deg, #121a2e, #0b1220); color:#8ab4ff; border:1px solid #1e293b }
-    .task-meta h3{ margin:0; font-size:16px; font-weight:900 }
-    .task-meta p{ margin:0; font-size:13px; color:#9db5ff }
-
-    /* Follow Channels (baru ganti cek-in) */
-    .follow-list{ display:grid; gap:8px; margin-top:8px }
-    .follow-item{ display:flex; align-items:center; justify-content:space-between; gap:10px; background:#0b1220; border:1px solid var(--line); border-radius:12px; padding:10px 12px }
-    .follow-meta{ display:flex; align-items:center; gap:10px }
-    .follow-ico{ width:36px; height:36px; border-radius:12px; display:grid; place-items:center; background:linear-gradient(135deg,#dfe7ff,#eaf3ff); color:#08243c; font-weight:900 }
-    .follow-action{ display:flex; gap:8px }
-  </style>
-
-  <link rel="stylesheet" href="./assets/css/styles.css"/>
-</head>
-<body>
-  <div id="app" class="app">
-    <header class="app-header">
-      <div class="brand">
-        <div class="logo-glow"></div>
-        <span class="brand-title">Watch2Earn<span class="accent">Reall</span></span>
-      </div>
-      <div class="coins">
-        <span id="balance">$0.00</span>
-      </div>
-    </header>
-
-    <main>
-      <section id="screen-home" class="screen active">
-        <div class="home-hero card">
-          <h2>Welcome to Watch2EarnReall</h2>
-          <p class="muted">Watch ads & complete tasks to earn rewards.</p>
-        </div>
-
-        <!-- === GANTI CEK-IN -> FOLLOW CHANNELS === -->
-        <div class="card" id="followCard">
-          <div class="section-title">
-            <h3>Follow Channels</h3>
-            <span class="muted">Join & verify — one time</span>
-          </div>
-
-          <div id="followList" class="follow-list"><!-- diisi JS --></div>
-          <p class="muted" style="margin-top:8px;font-size:12px">Klik <b>Join</b> untuk membuka channel, lalu kembali dan klik <b>Verify</b> untuk kredit.</p>
-        </div>
-
-        <div class="home-ref-card">
-          <h3>Invite Friends & Earn</h3>
-          <p class="muted">Get 25% of their earnings for life. Share your link and start earning together!</p>
-          <button id="btnHomeRefer" class="btn btn-cta">Start Referring</button>
-        </div>
-      </section>
-
-      <section id="screen-task" class="screen">
-        <div class="section-title">
-          <p class="muted">Complete the tasks to earn rewards. Verification is done on the server.</p>
-        </div>
-
-        <div class="tasks-list">
-          <article class="task-card" data-task-id="ad1">
-            <div class="task-left">
-              <div class="task-icon">▶</div>
-              <div class="task-meta">
-                <h3>Watch Ad #1</h3>
-                <p>Duration ~15–30 sec • Reward after validation</p>
-              </div>
-            </div>
-            <div class="task-right">
-              <span class="pill" data-reward-label>$0.01</span>
-              <button class="btn btn-cta" data-action="watch">Watch Ad</button>
-            </div>
-          </article>
-
-          <article class="task-card" data-task-id="ad2">
-            <div class="task-left">
-              <div class="task-icon">▶</div>
-              <div class="task-meta">
-                <h3>Watch Ad #2</h3>
-                <p>Duration ~15–30 sec • Reward after validation</p>
-              </div>
-            </div>
-            <div class="task-right">
-              <span class="pill" data-reward-label>$0.01</span>
-              <button class="btn btn-cta" data-action="watch">Watch Ad</button>
-            </div>
-          </article>
-
-          <article class="task-card" data-task-id="ad3">
-            <div class="task-left">
-              <div class="task-icon">▶</div>
-              <div class="task-meta">
-                <h3>Watch Ad #3</h3>
-                <p>Duration ~15–30 sec • Reward after validation</p>
-              </div>
-            </div>
-            <div class="task-right">
-              <span class="pill" data-reward-label>$0.01</span>
-              <button class="btn btn-cta" data-action="watch">Watch Ad</button>
-            </div>
-          </article>
-        </div>
-
-        <div class="section-title"><span></span><small class="muted">After the ad finishes, the server will verify before adding your balance.</small></div>
-      </section>
-
-      <section id="screen-referral" class="screen">
-        <div class="card">
-          <h3>Refer & Earn Forever</h3>
-          <p class="muted">Share your link & earn a lifetime percentage.</p>
-          <!-- Referral UI kamu di sini (dari file asli) -->
-        </div>
-      </section>
-
-      <section id="screen-profile" class="screen">
-        <div class="profile card">
-          <div class="pf-head" style="display:flex;gap:12px;align-items:center">
-            <img id="profileAvatar" class="pf-ava" alt="avatar" src="assets/images/avatar.svg" style="width:56px;height:56px;border-radius:999px;border:2px solid #1f2937;object-fit:cover;background:#111827"/>
+  // ===== FOLLOW CHANNELS (gantikan cek-in) =====
+  function renderFollowList(){
+    if (!els.followList) return;
+    if (!FOLLOW_CHANNELS.length){
+      els.followList.innerHTML = `<div class="muted">No channels configured yet.</div>`;
+      return;
+    }
+    els.followList.innerHTML = FOLLOW_CHANNELS.map(ch=>{
+      const done = state.followDone.has(ch.id);
+      return `
+        <div class="follow-item" data-follow-id="${ch.id}" data-username="${ch.username}">
+          <div class="follow-meta">
+            <div class="follow-ico">★</div>
             <div>
-              <div id="profileName" style="font-weight:900">Guest</div>
-              <div id="profileUsername" class="muted">—</div>
+              <div style="font-weight:900">${ch.title}</div>
+              <div class="muted" style="font-size:12px">@${ch.username}</div>
             </div>
           </div>
+          <div class="follow-action">
+            <span class="pill">$${Number(ch.reward||0.01).toFixed(2)}</span>
+            <button class="btn btn-cta btn-join" ${done?'disabled':''}>Join</button>
+            <button class="btn btn-verify" ${done?'disabled':''}>Verify</button>
+          </div>
         </div>
+      `;
+    }).join("");
+    bindFollowActions();
+  }
 
-        <div class="withdraw card" style="margin-top:10px">
-          <h3>BEP20 Address</h3>
-          <form id="addressForm" style="display:grid;gap:8px">
-            <input id="bscAddress" class="pill" placeholder="0x..." style="height:42px"/>
-            <button class="btn" type="submit">Save Address</button>
-          </form>
-        </div>
+  function bindFollowActions(){
+    els.followList.querySelectorAll(".follow-item").forEach(item=>{
+      const fid = item.dataset.followId;
+      const username = item.dataset.username;
 
-        <div class="withdraw card" style="margin-top:10px">
-          <h3>Withdraw</h3>
-          <form id="withdrawForm" style="display:grid;gap:8px">
-            <input id="withdrawAmount" class="pill" type="number" step="0.01" min="1" placeholder="Amount (min $1.00)" style="height:42px"/>
-            <button class="btn" type="submit">Request Withdraw</button>
-          </form>
-          <p class="muted" style="margin-top:8px">Ensure your BEP20 address is correct before requesting.</p>
-        </div>
-      </section>
-    </main>
-  </div>
+      item.querySelector(".btn-join")?.addEventListener("click", ()=>{
+        try { tg?.openTelegramLink?.(`https://t.me/${username}`); }
+        catch { window.open(`https://t.me/${username}`,"_blank"); }
+      });
 
-  <!-- Bottom Tabs -->
-  <nav class="tabbar" style="position:fixed;left:0;right:0;bottom:0;padding:10px 12px 14px;background:rgba(10,12,20,.72);backdrop-filter: blur(8px);border-top:1px solid var(--line)">
-    <div class="tabs" style="max-width:760px;margin:0 auto;display:grid;grid-template-columns:repeat(4,1fr);gap:8px">
-      <div class="tab active" data-target="home">Home</div>
-      <div class="tab" data-target="task">Task</div>
-      <div class="tab" data-target="referral">Referral</div>
-      <div class="tab" data-target="profile">Profil</div>
-    </div>
-  </nav>
+      item.querySelector(".btn-verify")?.addEventListener("click", async ()=>{
+        try{
+          const start = await safeFetch(`/api/task/create`, {
+            method:"POST",
+            body: JSON.stringify({ task_id: `follow:${fid}`, type:"follow", channel: username, reward: 0.01 })
+          });
+          if (!start?.ok || !start.token) return toast(start?.error || "Gagal mulai verifikasi.","error");
 
-  <!-- Config & App -->
-  <script>
-    /* Isi daftar channel yang mau di-follow.
-       Format: { id: 'task key unik', title: 'Nama Channel', username: 't_me_username', reward: 0.01 } */
-    window.FOLLOW_CHANNELS = [
-      { id: 'follow_main', title: 'Channel Utama', username: 'your_channel_username', reward: 0.01 },
-      { id: 'follow_backup', title: 'Channel Backup', username: 'your_backup_username', reward: 0.01 }
-    ];
-  </script>
-  <script src="./assets/js/app.js"></script>
-</body>
-</html>
+          const data = await safeFetch(`/api/reward/complete`, {
+            method:"POST",
+            body: JSON.stringify({ task_id: `follow:${fid}`, token: start.token, type:"follow" })
+          });
+
+          if (data?.credited){
+            state.followDone.add(fid);
+            item.querySelectorAll("button").forEach(b=> b.disabled = true);
+            toast("+$0.01");
+            if (typeof data.balance === "number") setBalance(data.balance); else await syncUser();
+          } else if (data?.awaiting){
+            await new Promise(r=>setTimeout(r, Number(data.wait_seconds||2)*1000));
+            const data2 = await safeFetch(`/api/reward/complete`, {
+              method:"POST",
+              body: JSON.stringify({ task_id: `follow:${fid}`, token: start.token, type:"follow" })
+            });
+            if (data2?.credited){
+              state.followDone.add(fid);
+              item.querySelectorAll("button").forEach(b=> b.disabled = true);
+              toast("+$0.01");
+              if (typeof data2.balance === "number") setBalance(data2.balance); else await syncUser();
+            } else { toast(data2?.error || "Belum terdeteksi join.","error"); }
+          } else {
+            toast(data?.error || "Belum terdeteksi join.","error");
+          }
+        } catch { toast("Failed to reach server.","error"); }
+      });
+    });
+  }
+
+  // ===== TASKS (watch ads) — reward 0.01 dari server =====
+  function paintTaskRewardLabels(){ els.taskRewardLabels?.forEach(el=> el.textContent = `$${TASK_REWARD.toFixed(2)}`); }
+  function initTasks(){
+    paintTaskRewardLabels();
+    document.querySelectorAll(".task-card .btn-cta[data-action='watch']").forEach(btn=>{
+      if (btn.__bound) return; btn.__bound = true;
+      btn.addEventListener("click", async ()=>{
+        try{
+          const card = btn.closest(".task-card");
+          const taskId = card?.dataset?.taskId;
+          if (!taskId) return;
+
+          try { const fn = window[window.MONETAG_FN]; if (typeof fn === "function") fn(); } catch {}
+
+          const start = await safeFetch(`/api/task/create`, {
+            method: "POST",
+            body: JSON.stringify({ task_id: taskId, reward: TASK_REWARD })
+          });
+          if (!start?.ok || !start.token) return toast(start?.error || "Gagal mulai task.","error");
+
+          const token = start.token;
+          const waitSec = Number(start.wait_seconds || 16);
+          await new Promise(r => setTimeout(r, waitSec * 1000));
+
+          async function complete(){
+            const data = await safeFetch(`/api/reward/complete`, {
+              method:"POST",
+              body: JSON.stringify({ task_id: taskId, token, reward: TASK_REWARD })
+            });
+            if (data?.credited){
+              btn.disabled = true;
+              toast("+$0.01");
+              if (typeof data.balance === "number") setBalance(data.balance); else await syncUser();
+              return;
+            }
+            if (data?.awaiting && data.wait_seconds>0){
+              await new Promise(r=>setTimeout(r, Number(data.wait_seconds)*1000));
+              return complete();
+            }
+            toast(data?.error || "Verification failed.","error");
+          }
+          await complete();
+        } catch { toast("Failed to reach server.","error"); }
+      });
+    });
+  }
+
+  // ===== PROFILE / WITHDRAW / ADDRESS (tak diubah) =====
+  function setProfile(){
+    try{
+      const u = window.Telegram?.WebApp?.initDataUnsafe?.user;
+      state.user = u || state.user;
+      if (els.profileAvatar)   els.profileAvatar.src = u?.photo_url || "assets/images/avatar.svg";
+      if (els.profileName)     els.profileName.textContent = u?.first_name || "Guest";
+      if (els.profileUsername) els.profileUsername.textContent = u?.username ? `@${u.username}` : "—";
+    } catch {}
+  }
+  function initWithdrawForm(){
+    els.withdrawForm?.addEventListener("submit", async (e)=>{
+      e.preventDefault();
+      const amount = Number(els.withdrawAmount.value || 0);
+      if (!amount || amount < 1) return toast("Minimum withdraw is $1.00","error");
+      try{
+        const data = await safeFetch(`/api/withdraw`, { method:"POST", body: JSON.stringify({ amount, address: state.address }) });
+        if (data?.ok){ toast("Withdrawal request submitted."); els.withdrawAmount.value = ""; }
+        else { toast(data?.error || "Withdraw failed.","error"); }
+      } catch { toast("Failed to reach server.","error"); }
+    });
+  }
+  function initAddressForm(){
+    els.addressForm?.addEventListener("submit", async (e)=>{
+      e.preventDefault();
+      const addr = (els.bscAddress.value || "").trim();
+      if (!/^0x[a-fA-F0-9]{40}$/.test(addr)) return toast("Invalid BEP20 address.","error");
+      state.address = addr; localStorage.setItem("bsc_address", addr);
+      try{
+        await safeFetch(`/api/address/save`, { method:"POST", body: JSON.stringify({ address: addr }) });
+        toast("Address saved.");
+      } catch { toast("Failed to save address.","error"); }
+    });
+  }
+
+  // ===== NAV =====
+  function setScreen(name){
+    Object.entries(els.screens).forEach(([k, el]) => el?.classList.toggle("active", k === name));
+    els.tabs.forEach(tab => tab.classList.toggle("active", tab.dataset.target === name));
+  }
+  function initTabs(){ els.tabs.forEach(tab => tab.addEventListener("click", () => setScreen(tab.dataset.target))); }
+
+  // ===== USER SYNC =====
+  async function syncUser(){
+    try{
+      const data = await safeFetch(`/api/user/get`);
+      const u = (data && data.user) ? data.user : data;
+      if (u && typeof u.balance === "number") setBalance(u.balance);
+      if (Array.isArray(u?.follow_done)) u.follow_done.forEach(id=> state.followDone.add(id));
+      renderFollowList();
+    } catch {}
+  }
+
+  // ===== INIT =====
+  function init(){
+    ensureUser();
+    setProfile();
+    setBalance(state.balance);
+
+    initTabs();
+    renderFollowList();
+    initTasks();
+    initWithdrawForm();
+    initAddressForm();
+
+    syncUser();
+
+    document.body.dataset.tg = tg?.colorScheme || "light";
+  }
+
+  // expose
+  window.safeFetch = safeFetch;
+  window.setBalance = setBalance;
+  window.syncUser = syncUser;
+
+  init();
+})();
