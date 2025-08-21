@@ -429,6 +429,79 @@
   });
 })();
 </script>
+<script>
+/* === PATCH: Check-in sekali per hari — set "Already claimed" & disable === */
+(function () {
+  // 1) Ganti element tombol agar event listener lama hilang (bersih)
+  var oldBtn = document.getElementById('btnClaim');
+  if (!oldBtn) return;
+  var btn = oldBtn.cloneNode(true);
+  oldBtn.parentNode.replaceChild(btn, oldBtn);
+
+  var txt = document.getElementById('claimText');
+  var bal = document.getElementById('balance');
+
+  function toast(msg){ try{ Telegram.WebApp.showAlert(msg); } catch { alert(msg); } }
+  function setAlready(){
+    btn.disabled = true;
+    if (txt) txt.textContent = 'Already claimed';
+    btn.classList.add('is-claimed');
+  }
+  function setReady(){
+    btn.disabled = false;
+    if (txt) txt.textContent = 'Claim Bonus';
+    btn.classList.remove('is-claimed');
+  }
+
+  // 2) Sync state awal dari server: kalau sudah claim hari ini -> langsung "Already claimed"
+  (async function init(){
+    try{
+      const r = await fetch('/api/user/get');
+      const j = await r.json();
+      if (j?.ok) {
+        if (j.user && j.user.balance != null && bal) {
+          bal.textContent = `$${Number(j.user.balance).toFixed(2)}`;
+        }
+        if (j.user && (j.user.checkin_today === true)) {
+          setAlready();
+        } else {
+          setReady();
+        }
+      }
+    }catch{}
+  })();
+
+  // 3) Klik cekin: POST ke server, lalu kunci tombol & ubah teks
+  btn.addEventListener('click', async function (e) {
+    e.preventDefault();
+    if (btn.disabled) return;
+
+    btn.disabled = true;
+    try {
+      const r = await fetch('/api/checkin/claim', { method: 'POST' });
+      const j = await r.json();
+
+      if (!j.ok) {
+        // gagal -> kembalikan tombol supaya bisa dicoba lagi
+        setReady();
+        return toast(j.error || 'Claim gagal');
+      }
+
+      // update saldo cepat
+      if (bal && j.balance != null) {
+        bal.textContent = `$${Number(j.balance).toFixed(2)}`;
+      }
+
+      // langsung kunci tombol + teks persis sesuai permintaan
+      setAlready();
+
+    } catch (err) {
+      setReady();
+      toast('Failed to reach server');
+    }
+  });
+})();
+</script>
 
   <script src="./app.js" defer></script>
 </body>
