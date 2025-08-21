@@ -1,479 +1,254 @@
-<!doctype html>
-<html lang="en" class="scroll-smooth">
+<!DOCTYPE html>
+<html lang="en">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
-  <title>Watch2EarnReall — Telegram Mini App</title>
-  <meta name="theme-color" content="#12d8fa"/>
-  <meta name="color-scheme" content="light only"/>
+  <meta charset="utf-8" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1"
+  />
+  <title>Watch2Earn Reall</title>
+  <meta name="theme-color" content="#0b1220" />
+  <style>
+    :root{
+      --bg:#0b1220; --card:#111827; --line:#1f2937; --text:#e5e7eb; --muted:#94a3b8;
+      --brand:#7c3aed; --brand2:#0ea5e9; --ok:#10b981; --err:#ef4444;
+    }
+    *{ box-sizing: border-box }
+    html,body{ height:100%; }
+    body{
+      margin:0; background:linear-gradient(160deg,#0b1220,#0c1426 40%, #0e1a2f 100%);
+      color:var(--text); font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial, "Apple Color Emoji","Segoe UI Emoji", "Segoe UI Symbol";
+    }
+    .wrap{ max-width:720px; margin:0 auto; padding:14px 14px 80px; }
 
-  <!-- Telegram Mini App SDK -->
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    /* Header */
+    .hdr{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
+    .logo{ display:flex; align-items:center; gap:10px; }
+    .logo .dot{ width:12px; height:12px; border-radius:999px; background:linear-gradient(90deg,#7c3aed,#0ea5e9) }
+    .balance{ display:flex; align-items:center; gap:10px; padding:10px 14px; border:1px solid var(--line); border-radius:14px; background:#0f172a }
+    .balance strong{ font-size:14px; color:#9ca3af }
+    #balance{ font-weight:900; font-size:16px }
 
-  <!-- Monetag Mini App SDK (SET) -->
-  <script src="//libtl.com/sdk.js" data-zone="9726748" data-sdk="show_9726748"></script>
+    .section-title{ margin:16px 4px 8px; font-weight:900; letter-spacing:.2px; }
+    .muted{ color:var(--muted) }
 
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://unpkg.com/@fontsource/poppins@5.0.8/400.css" rel="stylesheet">
-  <link href="https://unpkg.com/@fontsource/poppins@5.0.8/600.css" rel="stylesheet">
-  <link rel="stylesheet" href="./assets/css/styles.css"/>
+    /* Cards & buttons */
+    .grid{ display:grid; gap:12px }
+    .card{
+      background: #0f172a; border:1px solid var(--line);
+      border-radius:16px; padding:14px;
+      box-shadow: 0 10px 24px rgba(0,0,0,.15);
+    }
+    .row{ display:flex; align-items:center; gap:12px; }
+    .btn{
+      border:1px solid var(--line);
+      background:#111827; color:#e5e7eb; border-radius:12px;
+      padding:10px 14px; font-weight:800; cursor:pointer;
+    }
+    .btn-cta{
+      background:linear-gradient(90deg,#7c3aed,#0ea5e9); border:none; color:#fff;
+      font-weight:900; padding:10px 16px; border-radius:12px;
+      box-shadow:0 8px 18px rgba(124,58,237,.35);
+    }
+    .pill{ border-radius:999px }
+    .tag{ font-size:12px; color:#93c5fd; padding:4px 8px; border:1px solid #1e293b; border-radius:999px; background:#0b1220 }
+
+    /* Screens */
+    .screen{ display:none; }
+    .screen.active{ display:block; }
+
+    /* Task list */
+    .task-card{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
+    .task-meta{ display:flex; align-items:center; gap:10px; }
+    .task-ico{ width:42px; height:42px; border-radius:12px; display:grid; place-items:center; background:linear-gradient(135deg,#1f2937,#111827); font-size:18px }
+    .task-title{ font-weight:900 }
+    .task-reward{ font-weight:900 }
+
+    /* Profile */
+    .pf-head{ display:flex; align-items:center; gap:12px }
+    .pf-ava{ width:56px; height:56px; border-radius:999px; border:2px solid #1f2937; object-fit:cover; background:#111827 }
+
+    /* Bottom tabs */
+    .tabbar{
+      position:fixed; left:0; right:0; bottom:0; padding:10px 12px 14px;
+      background:rgba(10,12,20,.72); backdrop-filter: blur(8px); border-top:1px solid var(--line);
+    }
+    .tabs{ max-width:720px; margin:0 auto; display:grid; grid-template-columns:repeat(4,1fr); gap:8px; }
+    .tab{
+      background:#0f172a; border:1px solid var(--line);
+      color:#cbd5e1; border-radius:12px; padding:8px 6px; text-align:center; cursor:pointer; font-weight:800;
+    }
+    .tab.active{ color:#fff; border:1px solid #334155; outline:2px solid #1e293b; }
+    .center{ text-align:center }
+
+    /* Inputs */
+    .input{ width:100%; height:42px; border-radius:12px; border:1px solid var(--line); background:#0b1220; color:#fff; padding:0 12px; }
+    .form-row{ display:grid; gap:8px; }
+
+    /* small helpers */
+    .spacer{ height:8px }
+  </style>
 </head>
 <body>
-  <div id="app" class="app">
-    <header class="app-header">
-      <div class="brand">
-        <div class="logo-glow"></div>
-        <span class="brand-title">Watch2Earn<span class="accent">Reall</span></span>
+  <div class="wrap">
+    <header class="hdr">
+      <div class="logo">
+        <div class="dot"></div>
+        <div>
+          <div style="font-weight:1000; letter-spacing:.2px;">Watch2Earn</div>
+          <div class="muted" style="font-size:12px">Reall</div>
+        </div>
       </div>
-      <div class="coins">
+      <div class="balance">
+        <strong>Balance</strong>
         <span id="balance">$0.00</span>
       </div>
     </header>
 
-    <main class="screens">
-      <section id="screen-home" class="screen active">
-        <div class="checkin-card">
-          <h3 class="checkin-title">Daily Check-in Bonus</h3>
-          <p class="muted">Claim your daily reward and keep your streak!</p>
-
-          <div class="checkin-tiles" id="checkinTiles"><!-- filled by JS --></div>
-
-          <div class="checkin-progress">
-            <div class="checkin-progress-bar" id="checkinProgressBar"></div>
+    <!-- HOME -->
+    <section id="screen-home" class="screen active">
+      <h3 class="section-title">Welcome</h3>
+      <div class="card">
+        <div class="row" style="justify-content:space-between">
+          <div>
+            <div style="font-weight:900; font-size:18px">Start earning by watching ads</div>
+            <div class="muted">Open the Tasks tab and complete available ads.</div>
           </div>
-
-          <button class="btn btn-claim" id="btnClaim">
-            <span class="gift" aria-hidden="true">🎁</span>
-            <span id="claimText">Claim Bonus</span>
-          </button>
+          <button class="btn" onclick="document.querySelector('.tab[data-target=&quot;task&quot;]').click()">Go to Tasks →</button>
         </div>
+      </div>
+    </section>
 
-        <div class="home-ref-card">
-          <h3>Invite Friends & Earn</h3>
-          <p class="muted">Get 25% of their earnings</p>
-          <button id="btnHomeRefer" class="btn btn-ref-home">Start Referring</button>
-        </div>
-      </section>
+    <!-- TASKS -->
+    <section id="screen-task" class="screen">
+      <h3 class="section-title">Tasks</h3>
+      <div class="grid">
 
-      <section id="screen-task" class="screen">
-        <div class="section-title">
-          <p class="muted">Complete the tasks to earn rewards. Verification is done on the server.</p>
-        </div>
-
-        <div class="tasks-list">
-          <article class="task-card neon-border" data-task-id="ad1">
-            <div class="task-left">
-              <div class="task-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"></path></svg></div>
-              <div class="task-meta">
-                <h3>Watch Ad #1</h3>
-                <p class="muted">Duration ~15–30 sec • Reward after validation</p>
-              </div>
+        <!-- Task Card 1 -->
+        <div class="card task-card" data-task-id="ad1">
+          <div class="task-meta">
+            <div class="task-ico">▶</div>
+            <div>
+              <div class="task-title">Watch Ad #1</div>
+              <div class="muted">Short video</div>
             </div>
-            <div class="task-right"><button class="btn btn-cta" data-action="watch">Watch Ad</button></div>
-          </article>
+          </div>
+          <div class="row">
+            <span class="tag task-reward" data-reward-label>$0.01</span>
+            <button class="btn-cta" data-action="watch">Watch</button>
+          </div>
+        </div>
 
-          <article class="task-card neon-border" data-task-id="ad2">
-            <div class="task-left">
-              <div class="task-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2l1.5 6L21 9l-6 1.5L13 17l-1.5-6L5 9l6-1.5L13 2z"></path></svg></div>
-              <div class="task-meta">
-                <h3>Watch Ad #2</h3>
-                <p class="muted">Duration ~15–30 sec • Reward after validation</p>
-              </div>
+        <!-- Task Card 2 -->
+        <div class="card task-card" data-task-id="ad2">
+          <div class="task-meta">
+            <div class="task-ico">▶</div>
+            <div>
+              <div class="task-title">Watch Ad #2</div>
+              <div class="muted">Short video</div>
             </div>
-            <div class="task-right"><button class="btn btn-cta" data-action="watch">Watch Ad</button></div>
-          </article>
-        </div>
-
-        <div class="legend">
-          <small>Note: After the ad finishes, the server will verify before adding your balance.</small>
-        </div>
-      </section>
-
-      <section id="screen-referral" class="screen">
-        <div class="ref-hero glass card">
-          <div class="ref-hero-head">
-            <h2>Refer & Earn Forever</h2>
-            <div class="ref-badge">25%</div>
           </div>
-          <p class="muted">Earn <strong>25%</strong> of your friends earnings for life! Follow these simple steps to start:</p>
-
-          <ul class="ref-steps">
-            <li>
-              <div class="ref-ico">🔗</div>
-              <div><strong>1. Copy Your Link</strong><br><small>Grab your unique referral link below.</small></div>
-            </li>
-            <li>
-              <div class="ref-ico">📣</div>
-              <div><strong>2. Share with Friends</strong><br><small>Use the Telegram, WhatsApp, or Twitter/X buttons to share.</small></div>
-            </li>
-            <li>
-              <div class="ref-ico">💰</div>
-              <div><strong>3. Earn Lifetime Rewards</strong><br><small>Get 25% of your friends earnings forever once they join!</small></div>
-            </li>
-          </ul>
-
-          <h3 class="ref-subtitle">Your Referral Link</h3>
-          <div class="ref-input-group">
-            <input id="refLink" readonly value="Generating…"/>
-            <button id="btnCopyRef" class="btn copy-pill">Copy</button>
-          </div>
-
-          <div class="ref-share-buttons">
-            <button id="btnShareTG" class="btn brand tg">Telegram</button>
-            <button id="btnShareWA" class="btn brand wa">WhatsApp</button>
-            <button id="btnShareTW" class="btn brand tw">Twitter/X</button>
+          <div class="row">
+            <span class="tag task-reward" data-reward-label>$0.01</span>
+            <button class="btn-cta" data-action="watch">Watch</button>
           </div>
         </div>
 
-        <div class="glass card ref-list-card">
-          <div class="ref-list-head">
-            <h3>Referrals</h3>
-            <div class="ref-count-badge"><span id="refCount">0</span></div>
+        <!-- Task Card 3 -->
+        <div class="card task-card" data-task-id="ad3">
+          <div class="task-meta">
+            <div class="task-ico">▶</div>
+            <div>
+              <div class="task-title">Watch Ad #3</div>
+              <div class="muted">Short video</div>
+            </div>
           </div>
-          <div class="ref-search-row">
-            <input id="refSearch" placeholder="Search referrals by username…"/>
-          </div>
-          <div id="refList" class="ref-empty">Your referrals will appear here.</div>
-        </div>
-      </section>
-
-      <section id="screen-profile" class="screen">
-        <div class="profile-top">
-          <div class="profile-avatar" id="profileAvatar" title="Telegram Profile"></div>
-          <div class="profile-id">
-            <div id="profileName" class="profile-name">User</div>
-            <div id="profileUsername" class="profile-username">@username</div>
+          <div class="row">
+            <span class="tag task-reward" data-reward-label>$0.01</span>
+            <button class="btn-cta" data-action="watch">Watch</button>
           </div>
         </div>
 
-        <div class="glass card" id="withdrawCard">
-          <form id="withdrawForm" class="form">
-            <label for="withdrawAmount">Amount Withdraw (USD)</label>
-            <input id="withdrawAmount" name="amount" type="number" inputmode="decimal" min="1" step="0.01" placeholder="1.00" required />
-            <small class="muted">Minimum withdraw 1$</small>
-            <button class="btn btn-primary" type="submit" style="display:none">Submit Withdraw</button>
-          </form>
+      </div>
+    </section>
 
-          <!-- address form akan dipindah ke card ini via JS -->
+    <!-- REFERRAL (konten bisa dikelola dari backend atau diisi sendiri) -->
+    <section id="screen-referral" class="screen">
+      <h3 class="section-title">Referral</h3>
+      <div class="card">
+        <p class="muted">Share your referral link and earn a percentage of your friends' earnings forever.</p>
+        <!-- Jika kamu punya UI referral khusus, bisa taruh di sini -->
+      </div>
+    </section>
+
+    <!-- PROFILE -->
+    <section id="screen-profile" class="screen">
+      <h3 class="section-title">Profile & Withdraw</h3>
+
+      <div class="card">
+        <div class="pf-head">
+          <img id="profileAvatar" class="pf-ava" alt="avatar" src="assets/images/avatar.svg" />
+          <div>
+            <div id="profileName" style="font-weight:900">Guest</div>
+            <div id="profileUsername" class="muted">—</div>
+          </div>
         </div>
+      </div>
 
-        <div class="glass card" id="addressCard">
-          <form id="addressForm" class="form">
-            <label for="bscAddress">Address (BSC BEP20)</label>
-            <input id="bscAddress" name="address" type="text" placeholder="your address 0x.. or binance id" pattern="^0x[a-fA-F0-9]40$" required />
-            <small class="muted">Submit your address or binance id.</small>
-            <button class="btn" type="submit">Simpan Alamat</button>
-          </form>
-        </div>
-      </section>
-    </main>
+      <div class="spacer"></div>
 
-    <nav class="tabbar">
-      <button class="tab active" data-target="home" aria-label="Home">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l9 8h-3v9h-5v-6H11v6H6v-9H3z"/></svg>
-        <span>Home</span>
-      </button>
-      <button class="tab" data-target="task" aria-label="Task">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 11h8v2H9v-2zm0 4h8v2H9v-2zM7 7h10v2H7V7z"/></svg>
-        <span>Task</span>
-      </button>
-      <button class="tab" data-target="referral" aria-label="Referral">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5s-3 1.34-3 3 1.34 3 3 3zm-8 0C9.66 11 11 9.66 11 8S9.66 5 8 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.67 0-8 1.34-8 4v2h10v-2c0-2.66-5.33-4-8-4zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45v2H24v-2c0-2.66-5.33-4-8-4z"/></svg>
-        <span>Referral</span>
-      </button>
-      <button class="tab" data-target="profile" aria-label="Profile">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12c2.7 0 5-2.3 5-5s-2.3-5-5-5-5 2.3-5 5 2.3 5 5 5zm0 2c-3.3 0-10 1.7-10 5v3h20v-3c0-3.3-6.7-5-10-5z"/></svg>
-        <span>Profil</span>
-      </button>
-    </nav>
+      <div class="card">
+        <h4 style="margin:0 0 10px">BEP20 Address</h4>
+        <form id="addressForm" class="form-row">
+          <input id="bscAddress" class="input" placeholder="0x..." />
+          <button class="btn-cta" type="submit">Save Address</button>
+        </form>
+      </div>
+
+      <div class="spacer"></div>
+
+      <div class="card">
+        <h4 style="margin:0 0 10px">Withdraw</h4>
+        <form id="withdrawForm" class="form-row">
+          <input id="withdrawAmount" class="input" type="number" step="0.01" min="1" placeholder="Amount (min $1.00)" />
+          <button class="btn-cta" type="submit">Request Withdraw</button>
+        </form>
+        <p class="muted" style="margin-top:8px">Ensure your BEP20 address is correct before requesting.</p>
+      </div>
+    </section>
   </div>
 
-  <script src="./config.js"></script>
+  <!-- Bottom Tabbar -->
+  <nav class="tabbar">
+    <div class="tabs">
+      <div class="tab active" data-target="home">Home</div>
+      <div class="tab" data-target="task">Tasks</div>
+      <div class="tab" data-target="referral">Referral</div>
+      <div class="tab" data-target="profile">Profile</div>
+    </div>
+  </nav>
 
-  <!-- Patch fetch: inject x-telegram-init-data untuk semua /api pada origin yang sama -->
+  <!-- Telegram WebApp script is loaded in Telegram; optional for web debug -->
+  <!-- <script src="https://telegram.org/js/telegram-web-app.js"></script> -->
+
+  <!-- App logic (FINAL version you pasted earlier) -->
+  <script src="./app.js"></script>
   <script>
-    (function () {
-      function getInitData(){ try{ return Telegram?.WebApp?.initData || '' }catch{ return '' } }
-      const _fetch = window.fetch;
-      window.fetch = function(input, init){
-        try{
-          const urlStr = (typeof input === 'string') ? input : (input && input.url) || '';
-          const u = new URL(urlStr, location.href);
-          if (u.origin === location.origin && u.pathname.startsWith('/api/')) {
-            const headers = new Headers((init && init.headers) || (typeof input !== 'string' ? input.headers : undefined) || {});
-            const id = getInitData();
-            if (id && !headers.has('x-telegram-init-data')) headers.set('x-telegram-init-data', id);
-            init = Object.assign({}, init, { headers });
-          }
-        }catch{}
-        return _fetch(input, init);
+    // Simple tab switcher (matches app.js setScreen/initTabs expectation)
+    (function(){
+      const screens = {
+        home: document.getElementById("screen-home"),
+        task: document.getElementById("screen-task"),
+        referral: document.getElementById("screen-referral"),
+        profile: document.getElementById("screen-profile"),
       };
+      const tabs = document.querySelectorAll(".tabbar .tab");
+      function setScreen(name){
+        Object.entries(screens).forEach(([k,el]) => el?.classList.toggle("active", k===name));
+        tabs.forEach(t => t.classList.toggle("active", t.dataset.target===name));
+      }
+      tabs.forEach(t => t.addEventListener("click", () => setScreen(t.dataset.target)));
     })();
   </script>
-
-  <!-- === CHECK-IN (smooth, anti-flicker, cache-aware) === -->
-  <script>
-    (function(){
-      const SCHEDULE = ["0.02","0.04","0.06","0.08","0.10","0.12","0.14","0.16","0.18"];
-      const tilesEl = document.getElementById('checkinTiles');
-      const btn     = document.getElementById('btnClaim');
-      const btnTxt  = document.getElementById('claimText');
-      const balEl   = document.getElementById('balance');
-
-      function todayStr(){ return new Date().toISOString().slice(0,10); }
-      function toast(m){ try{Telegram.WebApp.showAlert(m);}catch{alert(m);} }
-
-      function renderTiles(streak){
-        const done = Number(streak || 0);
-        let html = '';
-        for (let i=1;i<=9;i++){
-          const amount  = SCHEDULE[i-1];
-          const claimed = i <= done;
-          const cls = claimed ? 'tile claimed' : (i===Math.min(done+1,9) ? 'tile current' : 'tile locked');
-          html += `
-            <div class="${cls}" data-day="${i}">
-              <div class="day">Day ${i}</div>
-              <div class="amt">${amount}</div>
-              ${claimed ? '<div class="tick">✔</div>' : ''}
-            </div>`;
-        }
-        if (tilesEl) tilesEl.innerHTML = html;
-      }
-
-      // Lock dulu biar nggak sempat kelihatan "aktif"
-      if (btn){ btn.disabled = true; if (btnTxt) btnTxt.textContent = 'Checking…'; }
-
-      // Terapkan cache lokal (hindari flicker)
-      (function applyCache(){
-        try{
-          const last   = localStorage.getItem('w2e-last-checkin-date');
-          const streak = Number(localStorage.getItem('w2e-streak') || 0);
-          renderTiles(streak);
-          const already = (last === todayStr());
-          if (btn){
-            if (already){
-              btn.disabled = true;
-              btn.classList.add('is-claimed');
-              if (btnTxt) btnTxt.textContent = 'Already claimed';
-            } else {
-              if (btnTxt) btnTxt.textContent = 'Checking…';
-            }
-          }
-        }catch{}
-      })();
-
-      // Sinkron server
-      async function syncFromServer(){
-        try{
-          const r = await fetch('/api/user/get');
-          const j = await r.json();
-          if (!j.ok) return;
-
-          if (balEl && j.user && j.user.balance != null){
-            balEl.textContent = `$${Number(j.user.balance).toFixed(2)}`;
-          }
-
-          const lastISO = j.user?.last_checkin ? String(j.user.last_checkin).slice(0,10) : null;
-          const already = Boolean(j.user?.checkin_today) || (lastISO === todayStr());
-          const streak  = Number(j.user?.streak || 0);
-
-          renderTiles(streak);
-
-          if (btn){
-            if (already){
-              btn.disabled = true;
-              btn.classList.add('is-claimed');
-              if (btnTxt) btnTxt.textContent = 'Already claimed';
-              localStorage.setItem('w2e-last-checkin-date', todayStr());
-              localStorage.setItem('w2e-streak', String(streak));
-            } else {
-              btn.disabled = false;
-              btn.classList.remove('is-claimed');
-              if (btnTxt) btnTxt.textContent = 'Claim Bonus';
-            }
-          }
-
-          // Update teks % referral dari server (default 10%)
-          const rp = Number(j.ref_percent || 10);
-          const badge = document.querySelector('.ref-badge'); if (badge) badge.textContent = `${rp}%`;
-          const home  = document.querySelector('.home-ref-card .muted'); if (home) home.textContent = `Get ${rp}% of their earnings`;
-          const hero  = document.querySelector('.ref-hero p.muted'); if (hero) hero.innerHTML = `Earn <strong>${rp}%</strong> of your friends earnings for life!`;
-        }catch{}
-      }
-
-      // Klik claim
-      btn && btn.addEventListener('click', async ()=>{
-        if (btn.disabled) return;
-        btn.disabled = true;
-        if (btnTxt) btnTxt.textContent = 'Claiming…';
-
-        try{
-          const r = await fetch('/api/checkin/claim', { method:'POST' });
-          const j = await r.json();
-          if (!j.ok){
-            btn.disabled = false;
-            if (btnTxt) btnTxt.textContent = 'Claim Bonus';
-            return toast(j.error || 'Claim failed');
-          }
-
-          if (balEl && j.balance != null){
-            balEl.textContent = `$${Number(j.balance).toFixed(2)}`;
-          }
-
-          const newStreak = Number(j.streak || j.day || 0);
-          renderTiles(newStreak);
-
-          btn.disabled = true;
-          btn.classList.add('is-claimed');
-          if (btnTxt) btnTxt.textContent = 'Already claimed';
-
-          localStorage.setItem('w2e-last-checkin-date', todayStr());
-          localStorage.setItem('w2e-streak', String(newStreak));
-        }catch{
-          btn.disabled = false;
-          if (btnTxt) btnTxt.textContent = 'Claim Bonus';
-          toast('Failed to reach server');
-        }
-      });
-
-      syncFromServer();
-    })();
-  </script>
-
-  <!-- === TASK IKLAN (tetap) === -->
-  <script>
-    (function(){
-      const bal=document.getElementById('balance');
-
-      function setBusy(btn,v){ if(!btn)return; btn.toggleAttribute('disabled', !!v); btn.dataset.busy=v?'1':''; }
-      function setLabel(btn,t){ if(!btn)return; if(!btn.dataset.prev) btn.dataset.prev=btn.textContent; btn.textContent=t; }
-      function resetLabel(btn){ if(!btn)return; const p=btn.dataset.prev; if(p) btn.textContent=p; delete btn.dataset.prev; }
-
-      function getMonetagFn(){
-        const s=document.querySelector('script[src*="libtl.com/sdk.js"]');
-        const name=s?.getAttribute('data-sdk')||'';
-        const fn= name && window[name];
-        return (typeof fn==='function') ? fn : null;
-      }
-      function showAdWithTimeout(ms=3000){
-        return new Promise(resolve=>{
-          let tried=0, done=false;
-          (function tick(){
-            const fn=getMonetagFn();
-            if (fn){ try{ fn(); done=true; return resolve(true);}catch{ return resolve(false);} }
-            if (++tried*200 >= ms) return resolve(false);
-            setTimeout(tick,200);
-          })();
-          setTimeout(()=>{ if(!done) resolve(false); }, ms+600);
-        });
-      }
-
-      async function watchTask(taskId, btn){
-        if (btn?.dataset.busy==='1') return;
-        setBusy(btn,true); setLabel(btn,'Starting…');
-
-        try{
-          // Tampilkan iklan (jika SDK siap)
-          await showAdWithTimeout(3000);
-
-          // Buat sesi
-          const r1=await fetch('/api/task/create',{
-            method:'POST',
-            headers:{'Content-Type':'application/json'},
-            body: JSON.stringify({ task_id: taskId })
-          });
-          const c1=await r1.json();
-          if (!c1.ok){ setLabel(btn,'Failed'); return; }
-
-          // Countdown
-          let left=Number(c1.wait_seconds||16);
-          while(left>0){ setLabel(btn,`Watching ${left}s`); await new Promise(r=>setTimeout(r,1000)); left--; }
-          setLabel(btn,'Verifying…');
-
-          // Verifikasi & update balance
-          for(let i=0;i<10;i++){
-            const r2=await fetch('/api/reward/complete',{
-              method:'POST',
-              headers:{'Content-Type':'application/json'},
-              body: JSON.stringify({ task_id: taskId, token: c1.token })
-            });
-            const j=await r2.json();
-
-            if (j.awaiting && j.wait_seconds){
-              let w=Number(j.wait_seconds);
-              while(w>0){ setLabel(btn,`Verifying ${w}s`); await new Promise(r=>setTimeout(r,1000)); w--; }
-              continue;
-            }
-            if (j.credited){
-              if (bal && j.balance!=null) bal.textContent=`$${Number(j.balance).toFixed(2)}`;
-              setLabel(btn,'Done ✓'); setTimeout(()=>{ resetLabel(btn); setBusy(btn,false); }, 1200);
-              return;
-            }
-            await new Promise(r=>setTimeout(r,1000));
-          }
-          setLabel(btn,'Try again');
-        }catch(e){
-          setLabel(btn,'Error');
-        }finally{
-          setTimeout(()=>{ resetLabel(btn); setBusy(btn,false); }, 1500);
-        }
-      }
-
-      document.addEventListener('DOMContentLoaded', function(){
-        document.querySelectorAll('.task-card [data-action="watch"]').forEach(function(btn){
-          const card=btn.closest('.task-card');
-          const taskId=card?.getAttribute('data-task-id')||'ad1';
-          btn.addEventListener('click', ()=>watchTask(taskId, btn), {capture:false});
-        });
-      });
-    })();
-  </script>
-
-  <!-- === WITHDRAW: gabungkan jadi satu card & jadikan tombol bawah === -->
-  <script>
-    (function () {
-      const wForm = document.getElementById('withdrawForm');
-      const aForm = document.getElementById('addressForm');
-      const wCard = document.getElementById('withdrawCard');
-      const aCard = document.getElementById('addressCard');
-      if (!wForm || !aForm || !wCard || !aCard) return;
-
-      // pindahkan address ke card withdraw & hapus card kosong
-      aForm.style.marginTop = '16px';
-      wCard.appendChild(aForm);
-      aCard.remove();
-
-      // sembunyikan tombol submit asli (atas)
-      const wBtn = wForm.querySelector('button[type="submit"]');
-      if (wBtn) wBtn.style.display = 'none';
-
-      // tombol bawah jadi proxy submit withdraw
-      const aBtn = aForm.querySelector('button[type="submit"]');
-      if (aBtn){
-        aBtn.textContent = 'Submit Withdraw';
-        aBtn.type = 'button';
-        aBtn.id = 'btnWithdrawProxy';
-        aBtn.onclick = function(){
-          if (wForm.reportValidity && !wForm.reportValidity()) return;
-          if (wForm.requestSubmit) wForm.requestSubmit(); else wForm.submit();
-        };
-      }
-    })();
-  </script>
-
-  <style>
-    /* Tombol biru terang untuk Submit Withdraw */
-    #btnWithdrawProxy{
-      background: linear-gradient(90deg, #12d8fa, #00c6ff);
-      color:#fff !important;
-      border:none;
-      font-weight:600;
-      box-shadow:0 8px 24px rgba(0,198,255,.35);
-    }
-    #btnWithdrawProxy:active{ transform: translateY(1px); }
-    #btnWithdrawProxy:disabled{ opacity:.65; }
-  </style>
-
-  <script src="./app.js" defer></script>
 </body>
 </html>
