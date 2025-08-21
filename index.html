@@ -146,16 +146,18 @@
           </div>
         </div>
 
-        <div class="glass card">
+        <div class="glass card" id="withdrawCard">
           <form id="withdrawForm" class="form">
             <label for="withdrawAmount">Amount Withdraw (USD)</label>
             <input id="withdrawAmount" name="amount" type="number" inputmode="decimal" min="1" step="0.01" placeholder="1.00" required />
             <small class="muted">Minimum withdraw 1$</small>
-            <button class="btn btn-primary" type="submit">Submit Withdraw</button>
+            <button class="btn btn-primary" type="submit" style="display:none">Submit Withdraw</button>
           </form>
+
+          <!-- address form akan dipindah ke card ini via JS -->
         </div>
 
-        <div class="glass card">
+        <div class="glass card" id="addressCard">
           <form id="addressForm" class="form">
             <label for="bscAddress">Address (BSC BEP20)</label>
             <input id="bscAddress" name="address" type="text" placeholder="your address 0x.. or binance id" pattern="^0x[a-fA-F0-9]40$" required />
@@ -209,77 +211,136 @@
     })();
   </script>
 
-  <!-- Glue: Check-in (sekali per hari, disable tombol, centang Day, blokir pop iklan di tombol ini) + Referral% -->
+  <!-- === CHECK-IN (smooth, anti-flicker, cache-aware) === -->
   <script>
     (function(){
-      const SCHEDULE=["0.02","0.04","0.06","0.08","0.10","0.12","0.14","0.16","0.18"];
-      const tiles=document.getElementById('checkinTiles');
-      const btn=document.getElementById('btnClaim');
-      const txt=document.getElementById('claimText');
-      const bal=document.getElementById('balance');
+      const SCHEDULE = ["0.02","0.04","0.06","0.08","0.10","0.12","0.14","0.16","0.18"];
+      const tilesEl = document.getElementById('checkinTiles');
+      const btn     = document.getElementById('btnClaim');
+      const btnTxt  = document.getElementById('claimText');
+      const balEl   = document.getElementById('balance');
 
+      function todayStr(){ return new Date().toISOString().slice(0,10); }
       function toast(m){ try{Telegram.WebApp.showAlert(m);}catch{alert(m);} }
 
       function renderTiles(streak){
-        const done=Number(streak||0);
-        let html='';
-        for(let i=1;i<=9;i++){
-          const amount=SCHEDULE[i-1];
-          const claimed=i<=done;
-          const cls=claimed?'tile claimed':(i===Math.min(done+1,9)?'tile current':'tile locked');
-          html+=`<div class="${cls}" data-day="${i}">
-                   <div class="day">Day ${i}</div>
-                   <div class="amt">${amount}</div>
-                   ${claimed?'<div class="tick">✔</div>':''}
-                 </div>`;
+        const done = Number(streak || 0);
+        let html = '';
+        for (let i=1;i<=9;i++){
+          const amount  = SCHEDULE[i-1];
+          const claimed = i <= done;
+          const cls = claimed ? 'tile claimed' : (i===Math.min(done+1,9) ? 'tile current' : 'tile locked');
+          html += `
+            <div class="${cls}" data-day="${i}">
+              <div class="day">Day ${i}</div>
+              <div class="amt">${amount}</div>
+              ${claimed ? '<div class="tick">✔</div>' : ''}
+            </div>`;
         }
-        if(tiles) tiles.innerHTML=html;
+        if (tilesEl) tilesEl.innerHTML = html;
       }
 
-      async function refreshUser(){
-        const r=await fetch('/api/user/get'); const j=await r.json(); if(!j.ok) return;
-        if (bal && j.user && j.user.balance!=null) bal.textContent=`$${Number(j.user.balance).toFixed(2)}`;
+      // Lock dulu biar nggak sempat kelihatan "aktif"
+      if (btn){ btn.disabled = true; if (btnTxt) btnTxt.textContent = 'Checking…'; }
 
-        const already=!!j.user?.checkin_today;
-        if(btn){
-          btn.disabled=already;
-          if (txt) txt.textContent=already?'Sudah di-claim':'Claim Bonus';
-          btn.classList.toggle('is-claimed', already);
-        }
-        renderTiles(j.user?.streak||0);
-
-        const rp = Number(j.ref_percent || 10);
-        const badge=document.querySelector('.ref-badge'); if (badge) badge.textContent=`${rp}%`;
-        const home=document.querySelector('.home-ref-card .muted'); if (home) home.textContent=`Get ${rp}% of their earnings`;
-        const hero=document.querySelector('.ref-hero p.muted'); if (hero) hero.innerHTML=`Earn <strong>${rp}%</strong> of your friends earnings for life!`;
-      }
-
-      // Blokir event ke SDK Monetag di tombol check-in (hindari pop iklan)
-      if (btn){
-        const stop = e => { e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation(); };
-        ['pointerdown','touchstart','click'].forEach(ev => btn.addEventListener(ev, stop, {capture:true}));
-        btn.addEventListener('click', async function(){
-          if (btn.disabled) return;
-          btn.disabled=true;
-          try{
-            const r=await fetch('/api/checkin/claim',{method:'POST'});
-            const j=await r.json();
-            if(!j.ok){ btn.disabled=false; return toast(j.error||'Claim gagal'); }
-            if (bal && j.balance!=null) bal.textContent=`$${Number(j.balance).toFixed(2)}`;
-            if (txt) txt.textContent = j.already ? 'Sudah di-claim' : 'Claimed!';
-            btn.classList.add('is-claimed');
-            await refreshUser();
-          }catch(e){
-            btn.disabled=false; toast('Failed to reach server');
+      // Terapkan cache lokal (hindari flicker)
+      (function applyCache(){
+        try{
+          const last   = localStorage.getItem('w2e-last-checkin-date');
+          const streak = Number(localStorage.getItem('w2e-streak') || 0);
+          renderTiles(streak);
+          const already = (last === todayStr());
+          if (btn){
+            if (already){
+              btn.disabled = true;
+              btn.classList.add('is-claimed');
+              if (btnTxt) btnTxt.textContent = 'Already claimed';
+            } else {
+              if (btnTxt) btnTxt.textContent = 'Checking…';
+            }
           }
-        });
+        }catch{}
+      })();
+
+      // Sinkron server
+      async function syncFromServer(){
+        try{
+          const r = await fetch('/api/user/get');
+          const j = await r.json();
+          if (!j.ok) return;
+
+          if (balEl && j.user && j.user.balance != null){
+            balEl.textContent = `$${Number(j.user.balance).toFixed(2)}`;
+          }
+
+          const lastISO = j.user?.last_checkin ? String(j.user.last_checkin).slice(0,10) : null;
+          const already = Boolean(j.user?.checkin_today) || (lastISO === todayStr());
+          const streak  = Number(j.user?.streak || 0);
+
+          renderTiles(streak);
+
+          if (btn){
+            if (already){
+              btn.disabled = true;
+              btn.classList.add('is-claimed');
+              if (btnTxt) btnTxt.textContent = 'Already claimed';
+              localStorage.setItem('w2e-last-checkin-date', todayStr());
+              localStorage.setItem('w2e-streak', String(streak));
+            } else {
+              btn.disabled = false;
+              btn.classList.remove('is-claimed');
+              if (btnTxt) btnTxt.textContent = 'Claim Bonus';
+            }
+          }
+
+          // Update teks % referral dari server (default 10%)
+          const rp = Number(j.ref_percent || 10);
+          const badge = document.querySelector('.ref-badge'); if (badge) badge.textContent = `${rp}%`;
+          const home  = document.querySelector('.home-ref-card .muted'); if (home) home.textContent = `Get ${rp}% of their earnings`;
+          const hero  = document.querySelector('.ref-hero p.muted'); if (hero) hero.innerHTML = `Earn <strong>${rp}%</strong> of your friends earnings for life!`;
+        }catch{}
       }
 
-      refreshUser();
+      // Klik claim
+      btn && btn.addEventListener('click', async ()=>{
+        if (btn.disabled) return;
+        btn.disabled = true;
+        if (btnTxt) btnTxt.textContent = 'Claiming…';
+
+        try{
+          const r = await fetch('/api/checkin/claim', { method:'POST' });
+          const j = await r.json();
+          if (!j.ok){
+            btn.disabled = false;
+            if (btnTxt) btnTxt.textContent = 'Claim Bonus';
+            return toast(j.error || 'Claim failed');
+          }
+
+          if (balEl && j.balance != null){
+            balEl.textContent = `$${Number(j.balance).toFixed(2)}`;
+          }
+
+          const newStreak = Number(j.streak || j.day || 0);
+          renderTiles(newStreak);
+
+          btn.disabled = true;
+          btn.classList.add('is-claimed');
+          if (btnTxt) btnTxt.textContent = 'Already claimed';
+
+          localStorage.setItem('w2e-last-checkin-date', todayStr());
+          localStorage.setItem('w2e-streak', String(newStreak));
+        }catch{
+          btn.disabled = false;
+          if (btnTxt) btnTxt.textContent = 'Claim Bonus';
+          toast('Failed to reach server');
+        }
+      });
+
+      syncFromServer();
     })();
   </script>
 
-  <!-- Glue: Task Iklan (panggil Monetag, lalu countdown & verifikasi; update balance cepat) -->
+  <!-- === TASK IKLAN (tetap) === -->
   <script>
     (function(){
       const bal=document.getElementById('balance');
@@ -312,7 +373,7 @@
         setBusy(btn,true); setLabel(btn,'Starting…');
 
         try{
-          // Panggil iklan dulu (kalau SDK siap)
+          // Tampilkan iklan (jika SDK siap)
           await showAdWithTimeout(3000);
 
           // Buat sesi
@@ -329,7 +390,7 @@
           while(left>0){ setLabel(btn,`Watching ${left}s`); await new Promise(r=>setTimeout(r,1000)); left--; }
           setLabel(btn,'Verifying…');
 
-          // Verifikasi & update balance cepat
+          // Verifikasi & update balance
           for(let i=0;i<10;i++){
             const r2=await fetch('/api/reward/complete',{
               method:'POST',
@@ -367,215 +428,51 @@
       });
     })();
   </script>
-<script>
-/* PATCH: tombol check-in tidak bisa diklik */
-(function () {
-  var oldBtn = document.getElementById('btnClaim');
-  if (!oldBtn) return;
 
-  // Ganti element agar semua event listener lama (termasuk yang 'nyegel') hilang
-  var btn = oldBtn.cloneNode(true);
-  oldBtn.parentNode.replaceChild(btn, oldBtn);
+  <!-- === WITHDRAW: gabungkan jadi satu card & jadikan tombol bawah === -->
+  <script>
+    (function () {
+      const wForm = document.getElementById('withdrawForm');
+      const aForm = document.getElementById('addressForm');
+      const wCard = document.getElementById('withdrawCard');
+      const aCard = document.getElementById('addressCard');
+      if (!wForm || !aForm || !wCard || !aCard) return;
 
-  var txt = document.getElementById('claimText');
-  var bal = document.getElementById('balance');
+      // pindahkan address ke card withdraw & hapus card kosong
+      aForm.style.marginTop = '16px';
+      wCard.appendChild(aForm);
+      aCard.remove();
 
-  function toast(msg){ try{Telegram.WebApp.showAlert(msg);}catch{alert(msg);} }
+      // sembunyikan tombol submit asli (atas)
+      const wBtn = wForm.querySelector('button[type="submit"]');
+      if (wBtn) wBtn.style.display = 'none';
 
-  // Optional: sinkron state awal dari server (kalau sudah claim hari ini → disable)
-  (async function syncInit(){
-    try{
-      const r = await fetch('/api/user/get');
-      const j = await r.json();
-      if (j?.ok) {
-        if (j.user && j.user.balance != null && bal) {
-          bal.textContent = `$${Number(j.user.balance).toFixed(2)}`;
-        }
-        if (btn) {
-          const already = !!j.user?.checkin_today;
-          btn.disabled = already;
-          if (txt) txt.textContent = already ? 'Sudah di-claim' : 'Claim Bonus';
-          if (already) btn.classList.add('is-claimed'); else btn.classList.remove('is-claimed');
-        }
+      // tombol bawah jadi proxy submit withdraw
+      const aBtn = aForm.querySelector('button[type="submit"]');
+      if (aBtn){
+        aBtn.textContent = 'Submit Withdraw';
+        aBtn.type = 'button';
+        aBtn.id = 'btnWithdrawProxy';
+        aBtn.onclick = function(){
+          if (wForm.reportValidity && !wForm.reportValidity()) return;
+          if (wForm.requestSubmit) wForm.requestSubmit(); else wForm.submit();
+        };
       }
-    }catch{}
-  })();
+    })();
+  </script>
 
-  // Click handler baru (bersih)
-  btn.addEventListener('click', async function (e) {
-    e.preventDefault();
-    if (btn.disabled) return;
-
-    btn.disabled = true;
-    try {
-      const r = await fetch('/api/checkin/claim', { method: 'POST' });
-      const j = await r.json();
-
-      if (!j.ok) {
-        btn.disabled = false;
-        return toast(j.error || 'Claim gagal');
-      }
-
-      if (bal && j.balance != null) {
-        bal.textContent = `$${Number(j.balance).toFixed(2)}`;
-      }
-      if (txt) txt.textContent = j.already ? 'Sudah di-claim' : 'Claimed!';
-      btn.classList.add('is-claimed');
-    } catch (e2) {
-      btn.disabled = false;
-      toast('Failed to reach server');
+  <style>
+    /* Tombol biru terang untuk Submit Withdraw */
+    #btnWithdrawProxy{
+      background: linear-gradient(90deg, #12d8fa, #00c6ff);
+      color:#fff !important;
+      border:none;
+      font-weight:600;
+      box-shadow:0 8px 24px rgba(0,198,255,.35);
     }
-  });
-})();
-</script>
-<script>
-/* === PATCH: Check-in sekali per hari — set "Already claimed" & disable === */
-(function () {
-  // 1) Ganti element tombol agar event listener lama hilang (bersih)
-  var oldBtn = document.getElementById('btnClaim');
-  if (!oldBtn) return;
-  var btn = oldBtn.cloneNode(true);
-  oldBtn.parentNode.replaceChild(btn, oldBtn);
-
-  var txt = document.getElementById('claimText');
-  var bal = document.getElementById('balance');
-
-  function toast(msg){ try{ Telegram.WebApp.showAlert(msg); } catch { alert(msg); } }
-  function setAlready(){
-    btn.disabled = true;
-    if (txt) txt.textContent = 'Already claimed';
-    btn.classList.add('is-claimed');
-  }
-  function setReady(){
-    btn.disabled = false;
-    if (txt) txt.textContent = 'Claim Bonus';
-    btn.classList.remove('is-claimed');
-  }
-
-  // 2) Sync state awal dari server: kalau sudah claim hari ini -> langsung "Already claimed"
-  (async function init(){
-    try{
-      const r = await fetch('/api/user/get');
-      const j = await r.json();
-      if (j?.ok) {
-        if (j.user && j.user.balance != null && bal) {
-          bal.textContent = `$${Number(j.user.balance).toFixed(2)}`;
-        }
-        if (j.user && (j.user.checkin_today === true)) {
-          setAlready();
-        } else {
-          setReady();
-        }
-      }
-    }catch{}
-  })();
-
-  // 3) Klik cekin: POST ke server, lalu kunci tombol & ubah teks
-  btn.addEventListener('click', async function (e) {
-    e.preventDefault();
-    if (btn.disabled) return;
-
-    btn.disabled = true;
-    try {
-      const r = await fetch('/api/checkin/claim', { method: 'POST' });
-      const j = await r.json();
-
-      if (!j.ok) {
-        // gagal -> kembalikan tombol supaya bisa dicoba lagi
-        setReady();
-        return toast(j.error || 'Claim gagal');
-      }
-
-      // update saldo cepat
-      if (bal && j.balance != null) {
-        bal.textContent = `$${Number(j.balance).toFixed(2)}`;
-      }
-
-      // langsung kunci tombol + teks persis sesuai permintaan
-      setAlready();
-
-    } catch (err) {
-      setReady();
-      toast('Failed to reach server');
-    }
-  });
-})();
-</script>
-<script>
-/* PATCH: Pindahkan aksi "Submit Withdraw" ke tombol bawah (ganti "Simpan Alamat") */
-(function () {
-  const wForm  = document.getElementById('withdrawForm'); // form atas
-  const aForm  = document.getElementById('addressForm');  // form bawah
-  if (!wForm || !aForm) return;
-
-  // Sembunyikan tombol submit asli di form withdraw (biar tidak ada dua tombol)
-  const wBtn = wForm.querySelector('button[type="submit"]');
-  if (wBtn) wBtn.style.display = 'none';
-
-  // Ubah tombol bawah jadi "Submit Withdraw" dan arahkan untuk submit form withdraw
-  const aBtn = aForm.querySelector('button[type="submit"]');
-  if (aBtn) {
-    aBtn.textContent = 'Submit Withdraw'; // ganti label
-    aBtn.type = 'button';                  // cegah submit ke form alamat
-    aBtn.id = 'btnWithdrawProxy';
-    aBtn.addEventListener('click', function () {
-      // Validasi form withdraw jika ada atribut required di dalamnya
-      if (wForm.reportValidity && !wForm.reportValidity()) return;
-      // Submit form withdraw (mendukung browser lama & baru)
-      if (wForm.requestSubmit) wForm.requestSubmit();
-      else wForm.submit();
-    });
-  }
-})();
-</script>
-<style>
-/* Warna biru terang untuk tombol Submit Withdraw */
-#btnWithdrawProxy{
-  background: linear-gradient(90deg, #12d8fa, #00c6ff);
-  color: #fff !important;
-  border: none;
-  font-weight: 600;
-  box-shadow: 0 8px 24px rgba(0,198,255,.35);
-}
-#btnWithdrawProxy:active{ transform: translateY(1px); }
-#btnWithdrawProxy:disabled{ opacity: .65; }
-</style>
-
-<script>
-/* PATCH: Gabungkan dua card (withdraw + address) jadi satu & styling tombol biru */
-(function () {
-  const wForm = document.getElementById('withdrawForm');
-  const aForm = document.getElementById('addressForm');
-  if (!wForm || !aForm) return;
-
-  // 1) Gabungkan card: pindahkan addressForm ke dalam card yang sama dgn withdrawForm
-  const wCard = wForm.closest('.glass.card');
-  const aCard = aForm.closest('.glass.card');
-  if (wCard && aCard && aCard !== wCard) {
-    // beri jarak sedikit
-    aForm.style.marginTop = '16px';
-    wCard.appendChild(aForm);     // addressForm sekarang di card yang sama
-    aCard.remove();               // hapus card kosong
-  }
-
-  // 2) Pindahkan fungsi submit withdraw ke tombol bawah & sembunyikan tombol submit asli (atas)
-  const wBtn = wForm.querySelector('button[type="submit"]');
-  if (wBtn) wBtn.style.display = 'none';
-
-  const aBtn = aForm.querySelector('button[type="submit"]') || aForm.querySelector('button');
-  if (!aBtn) return;
-
-  // ubah tombol bawah jadi proxy submit withdraw
-  aBtn.textContent = 'Submit Withdraw';
-  aBtn.type = 'button';
-  aBtn.id = 'btnWithdrawProxy';
-  aBtn.onclick = function(){
-    if (wForm.reportValidity && !wForm.reportValidity()) return;
-    if (wForm.requestSubmit) wForm.requestSubmit();
-    else wForm.submit();
-  };
-})();
-</script>
+    #btnWithdrawProxy:active{ transform: translateY(1px); }
+    #btnWithdrawProxy:disabled{ opacity:.65; }
+  </style>
 
   <script src="./app.js" defer></script>
 </body>
