@@ -1,4 +1,3 @@
-// /api/withdraw/request.js
 const { q } = require('../_lib/db');
 const { authFromHeader } = require('../_lib/auth');
 
