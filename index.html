@@ -32,25 +32,42 @@
 
     <main class="screens">
       <section id="screen-home" class="screen active">
-        <div class="checkin-card">
-          <h3 class="checkin-title">Daily Check-in Bonus</h3>
-          <p class="muted">Claim your daily reward and keep your streak!</p>
+        <div class="follow-card glass card">
+  <h3>Follow Our Channel</h3>
+  <p class="muted">Join our Telegram channel and get instant reward.</p>
 
-          <div class="checkin-tiles" id="checkinTiles"><!-- filled by JS --></div>
+  <ul class="follow-steps" style="display:grid;gap:10px;margin:10px 0 14px;padding:0;">
+    <li style="list-style:none;display:flex;gap:10px;align-items:flex-start;background:#f9fafb;border:1px solid rgba(0,0,0,.06);border-radius:12px;padding:10px;">
+      <div class="ico" style="width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:#eef2ff;font-weight:900;">1</div>
+      <div>Tap <b>Open Channel</b> to open our official channel.</div>
+    </li>
+    <li style="list-style:none;display:flex;gap:10px;align-items:flex-start;background:#f9fafb;border:1px solid rgba(0,0,0,.06);border-radius:12px;padding:10px;">
+      <div class="ico" style="width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:#eef2ff;font-weight:900;">2</div>
+      <div>Tap <b>Join</b> in Telegram.</div>
+    </li>
+    <li style="list-style:none;display:flex;gap:10px;align-items:flex-start;background:#f9fafb;border:1px solid rgba(0,0,0,.06);border-radius:12px;padding:10px;">
+      <div class="ico" style="width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:#eef2ff;font-weight:900;">3</div>
+      <div>Return here and press <b>Verify</b> to receive your reward.</div>
+    </li>
+  </ul>
 
-          <div class="checkin-progress">
-            <div class="checkin-progress-bar" id="checkinProgressBar"></div>
-          </div>
+  <div class="btn-row" style="display:flex;gap:10px;">
+    <button id="btnOpenChannel" class="btn" style="flex:1 1 auto;">Open Channel</button>
+    <button id="btnVerifyFollow" class="btn" style="flex:1 1 auto;background:linear-gradient(90deg,#12d8fa,#00c6ff);color:#fff;font-weight:800;">Verify</button>
+  </div>
+  <div class="muted" id="followHint" style="font-size:12px;margin-top:6px;">Reward is credited once per account.</div>
+</div>
 
-          <button class="btn btn-claim" id="btnClaim">
-            <span class="gift" aria-hidden="true">🎁</span>
-            <span id="claimText">Claim Bonus</span>
-          </button>
-        </div>
+<!-- home-ref-card: ubah teks 25% → 10% -->
+<div class="home-ref-card">
+  <h3>Invite Friends & Earn</h3>
+  <p class="muted">Get 10% of their earnings</p>
+  <button id="btnHomeRefer" class="btn btn-ref-home">Start Referring</button>
+</div>
 
         <div class="home-ref-card">
           <h3>Invite Friends & Earn</h3>
-          <p class="muted">Get 25% of their earnings</p>
+          <p class="muted">Get 10% of their earnings</p>
           <button id="btnHomeRefer" class="btn btn-ref-home">Start Referring</button>
         </div>
       </section>
