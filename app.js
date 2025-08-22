@@ -465,7 +465,7 @@
       if (isNaN(amount) || amount < 1) return toast("Minimum withdraw is $1", "error");
       if (!state.address) return toast("Please fill your BEP20 address first.", "error");
       try {
-        const data = await safeFetch(`/api/withdraw`, {
+        const data = await safeFetch(`/api/withdraw/request`, {
           method: "POST",
           body: JSON.stringify({ amount, address: state.address })
         });
