@@ -429,50 +429,118 @@
     })();
   </script>
 
-  <!-- === WITHDRAW: gabungkan jadi satu card & jadikan tombol bawah === -->
   <script>
-    (function () {
-      const wForm = document.getElementById('withdrawForm');
-      const aForm = document.getElementById('addressForm');
-      const wCard = document.getElementById('withdrawCard');
-      const aCard = document.getElementById('addressCard');
-      if (!wForm || !aForm || !wCard || !aCard) return;
+/* WITHDRAW: gabung form + tombol bawah + inject Riwayat */
+(function () {
+  const wForm = document.getElementById('withdrawForm');
+  const aForm = document.getElementById('addressForm');
+  const wCard = document.getElementById('withdrawCard');
+  const aCard = document.getElementById('addressCard');
+  if (!wForm || !aForm || !wCard || !aCard) return;
 
-      // pindahkan address ke card withdraw & hapus card kosong
-      aForm.style.marginTop = '16px';
-      wCard.appendChild(aForm);
-      aCard.remove();
+  // 1) gabungkan card
+  aForm.style.marginTop = '16px';
+  wCard.appendChild(aForm);
+  aCard.remove();
 
-      // sembunyikan tombol submit asli (atas)
-      const wBtn = wForm.querySelector('button[type="submit"]');
-      if (wBtn) wBtn.style.display = 'none';
+  // 2) proxy tombol submit (bawah)
+  const wBtn = wForm.querySelector('button[type="submit"]');
+  if (wBtn) wBtn.style.display = 'none';
+  const aBtn = aForm.querySelector('button[type="submit"]');
+  if (aBtn){
+    aBtn.textContent = 'Submit Withdraw';
+    aBtn.type = 'button';
+    aBtn.id = 'btnWithdrawProxy';
+    aBtn.onclick = function(){
+      if (wForm.reportValidity && !wForm.reportValidity()) return;
+      if (wForm.requestSubmit) wForm.requestSubmit(); else wForm.submit();
+    };
+  }
 
-      // tombol bawah jadi proxy submit withdraw
-      const aBtn = aForm.querySelector('button[type="submit"]');
-      if (aBtn){
-        aBtn.textContent = 'Submit Withdraw';
-        aBtn.type = 'button';
-        aBtn.id = 'btnWithdrawProxy';
-        aBtn.onclick = function(){
-          if (wForm.reportValidity && !wForm.reportValidity()) return;
-          if (wForm.requestSubmit) wForm.requestSubmit(); else wForm.submit();
-        };
+  // 3) inject kartu Riwayat (tanpa edit HTML)
+  let histCard = document.getElementById('wdHistoryCard');
+  if (!histCard){
+    histCard = document.createElement('div');
+    histCard.className = 'glass card';
+    histCard.id = 'wdHistoryCard';
+    histCard.innerHTML = `
+      <h3>Withdraw History</h3>
+      <div id="wdHistoryList" class="wd-list empty">No history yet.</div>
+    `;
+    wCard.parentNode.appendChild(histCard);
+  }
+  const listEl = document.getElementById('wdHistoryList');
+
+  function fmtDate(iso){ try{ return new Date(iso).toLocaleString(); }catch{return iso||'';} }
+  function badge(status){
+    const s = String(status||'').toLowerCase();
+    const cls = s==='approved' ? 'approved' : (s==='rejected' ? 'rejected' : 'pending');
+    return `<span class="wd-badge ${cls}">${s||'pending'}</span>`;
+  }
+
+  async function fetchWithdrawHistory(){
+    try{
+      const r = await fetch('/api/withdraw');        // GET = history
+      const j = await r.json();
+      const items = Array.isArray(j?.items) ? j.items : [];
+      if (!listEl) return;
+      if (!items.length){
+        listEl.classList.add('empty');
+        listEl.innerHTML = 'No history yet.';
+        return;
       }
-    })();
-  </script>
+      listEl.classList.remove('empty');
+      listEl.innerHTML = items.map(row => `
+        <div class="row">
+          <div>
+            <div class="amt">-$${Number(row.amount||0).toFixed(2)}</div>
+            <div class="meta">${fmtDate(row.created_at)}</div>
+          </div>
+          <div>${badge(row.status)}</div>
+        </div>
+      `).join('');
+    }catch{}
+  }
 
-  <style>
-    /* Tombol biru terang untuk Submit Withdraw */
-    #btnWithdrawProxy{
-      background: linear-gradient(90deg, #12d8fa, #00c6ff);
-      color:#fff !important;
-      border:none;
-      font-weight:600;
-      box-shadow:0 8px 24px rgba(0,198,255,.35);
-    }
-    #btnWithdrawProxy:active{ transform: translateY(1px); }
-    #btnWithdrawProxy:disabled{ opacity:.65; }
-  </style>
+  // 4) refresh riwayat setelah submit sukses
+  wForm.addEventListener('submit', async (e) => {
+    // handler submit kamu yang sekarang akan tetap jalan (di app.js),
+    // tapi kita juga hook di sini kalau ada yang submit via proxy langsung:
+    setTimeout(fetchWithdrawHistory, 800);
+  });
+
+  // initial load
+  fetchWithdrawHistory();
+})();
+</script>
+
+<style>
+  /* Tombol biru terang */
+  #btnWithdrawProxy{
+    background: linear-gradient(90deg, #12d8fa, #00c6ff);
+    color:#fff !important; border:none; font-weight:600;
+    box-shadow:0 8px 24px rgba(0,198,255,.35);
+  }
+  #btnWithdrawProxy:active{ transform: translateY(1px); }
+  #btnWithdrawProxy:disabled{ opacity:.65; }
+
+  /* Riwayat */
+  #wdHistoryCard h3{ margin-bottom:8px; }
+  .wd-list .row{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:10px 0; border-bottom:1px dashed rgba(0,0,0,.06);
+  }
+  .wd-list .amt{ font-weight:800; }
+  .wd-list .meta{ color:var(--muted,#6b7280); font-size:12px; }
+  .wd-badge{
+    padding:4px 10px; border-radius:999px; font-weight:800; font-size:12px;
+    background:#eef2f7; border:1px solid rgba(0,0,0,.06);
+  }
+  .wd-badge.pending{  background:#fff7e6; border-color:#ffd18a; color:#a86b00; }
+  .wd-badge.approved{ background:#e9ffef; border-color:#88e09d; color:#0c7a2b; }
+  .wd-badge.rejected{ background:#ffe9ec; border-color:#ff9aa6; color:#b11d2a; }
+</style>
+
 <script>
 /* Withdraw sekali klik: kirim amount + address langsung ke /api/withdraw/request */
 (function () {
