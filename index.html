@@ -229,133 +229,78 @@
   </script>
 
   <!-- === CHECK-IN (smooth, anti-flicker, cache-aware) === -->
-  <script>
-    (function(){
-      const SCHEDULE = ["0.02","0.04","0.06","0.08","0.10","0.12","0.14","0.16","0.18"];
-      const tilesEl = document.getElementById('checkinTiles');
-      const btn     = document.getElementById('btnClaim');
-      const btnTxt  = document.getElementById('claimText');
-      const balEl   = document.getElementById('balance');
+  <!-- === FOLLOW CHANNEL glue (gantikan blok CHECK-IN) === -->
+<script>
+(function(){
+  const CHANNEL = '@YourChannelUsername';           // TODO: ganti @channel kamu
+  const TASK_ID = `follow:${CHANNEL}`;              // dikenali server
 
-      function todayStr(){ return new Date().toISOString().slice(0,10); }
-      function toast(m){ try{Telegram.WebApp.showAlert(m);}catch{alert(m);} }
+  const balEl = document.getElementById('balance');
+  const openBtn = document.getElementById('btnOpenChannel');
+  const verifyBtn = document.getElementById('btnVerifyFollow');
+  const hint = document.getElementById('followHint');
 
-      function renderTiles(streak){
-        const done = Number(streak || 0);
-        let html = '';
-        for (let i=1;i<=9;i++){
-          const amount  = SCHEDULE[i-1];
-          const claimed = i <= done;
-          const cls = claimed ? 'tile claimed' : (i===Math.min(done+1,9) ? 'tile current' : 'tile locked');
-          html += `
-            <div class="${cls}" data-day="${i}">
-              <div class="day">Day ${i}</div>
-              <div class="amt">${amount}</div>
-              ${claimed ? '<div class="tick">✔</div>' : ''}
-            </div>`;
-        }
-        if (tilesEl) tilesEl.innerHTML = html;
-      }
+  function toast(m){ try{Telegram.WebApp.showAlert(m);}catch{alert(m);} }
 
-      // Lock dulu biar nggak sempat kelihatan "aktif"
-      if (btn){ btn.disabled = true; if (btnTxt) btnTxt.textContent = 'Checking…'; }
+  openBtn?.addEventListener('click', () => {
+    const slug = CHANNEL.replace(/^@/, '');
+    try { Telegram.WebApp.openLink(`https://t.me/${slug}`); }
+    catch { location.href = `https://t.me/${slug}`; }
+  });
 
-      // Terapkan cache lokal (hindari flicker)
-      (function applyCache(){
-        try{
-          const last   = localStorage.getItem('w2e-last-checkin-date');
-          const streak = Number(localStorage.getItem('w2e-streak') || 0);
-          renderTiles(streak);
-          const already = (last === todayStr());
-          if (btn){
-            if (already){
-              btn.disabled = true;
-              btn.classList.add('is-claimed');
-              if (btnTxt) btnTxt.textContent = 'Already claimed';
-            } else {
-              if (btnTxt) btnTxt.textContent = 'Checking…';
-            }
-          }
-        }catch{}
-      })();
-
-      // Sinkron server
-      async function syncFromServer(){
-        try{
-          const r = await fetch('/api/user/get');
-          const j = await r.json();
-          if (!j.ok) return;
-
-          if (balEl && j.user && j.user.balance != null){
-            balEl.textContent = `$${Number(j.user.balance).toFixed(2)}`;
-          }
-
-          const lastISO = j.user?.last_checkin ? String(j.user.last_checkin).slice(0,10) : null;
-          const already = Boolean(j.user?.checkin_today) || (lastISO === todayStr());
-          const streak  = Number(j.user?.streak || 0);
-
-          renderTiles(streak);
-
-          if (btn){
-            if (already){
-              btn.disabled = true;
-              btn.classList.add('is-claimed');
-              if (btnTxt) btnTxt.textContent = 'Already claimed';
-              localStorage.setItem('w2e-last-checkin-date', todayStr());
-              localStorage.setItem('w2e-streak', String(streak));
-            } else {
-              btn.disabled = false;
-              btn.classList.remove('is-claimed');
-              if (btnTxt) btnTxt.textContent = 'Claim Bonus';
-            }
-          }
-
-          // Update teks % referral dari server (default 10%)
-          const rp = Number(j.ref_percent || 10);
-          const badge = document.querySelector('.ref-badge'); if (badge) badge.textContent = `${rp}%`;
-          const home  = document.querySelector('.home-ref-card .muted'); if (home) home.textContent = `Get ${rp}% of their earnings`;
-          const hero  = document.querySelector('.ref-hero p.muted'); if (hero) hero.innerHTML = `Earn <strong>${rp}%</strong> of your friends earnings for life!`;
-        }catch{}
-      }
-
-      // Klik claim
-      btn && btn.addEventListener('click', async ()=>{
-        if (btn.disabled) return;
-        btn.disabled = true;
-        if (btnTxt) btnTxt.textContent = 'Claiming…';
-
-        try{
-          const r = await fetch('/api/checkin/claim', { method:'POST' });
-          const j = await r.json();
-          if (!j.ok){
-            btn.disabled = false;
-            if (btnTxt) btnTxt.textContent = 'Claim Bonus';
-            return toast(j.error || 'Claim failed');
-          }
-
-          if (balEl && j.balance != null){
-            balEl.textContent = `$${Number(j.balance).toFixed(2)}`;
-          }
-
-          const newStreak = Number(j.streak || j.day || 0);
-          renderTiles(newStreak);
-
-          btn.disabled = true;
-          btn.classList.add('is-claimed');
-          if (btnTxt) btnTxt.textContent = 'Already claimed';
-
-          localStorage.setItem('w2e-last-checkin-date', todayStr());
-          localStorage.setItem('w2e-streak', String(newStreak));
-        }catch{
-          btn.disabled = false;
-          if (btnTxt) btnTxt.textContent = 'Claim Bonus';
-          toast('Failed to reach server');
-        }
+  verifyBtn?.addEventListener('click', async () => {
+    if (verifyBtn.classList.contains('is-done')) return;
+    verifyBtn.disabled = true; verifyBtn.textContent = 'Verifying…';
+    try{
+      const r = await fetch('/api/reward/complete', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ task_id: TASK_ID })
       });
+      const j = await r.json();
 
-      syncFromServer();
-    })();
-  </script>
+      if (j.ok && j.credited){
+        if (balEl && j.balance!=null) balEl.textContent = `$${Number(j.balance).toFixed(2)}`;
+        verifyBtn.textContent = 'Verified ✓';
+        verifyBtn.classList.add('is-done');
+        hint && (hint.textContent = 'You have received the reward. Thank you!');
+        verifyBtn.disabled = false;
+        return;
+      }
+      if (j.ok && j.already){
+        verifyBtn.textContent = 'Verified ✓';
+        verifyBtn.classList.add('is-done');
+        verifyBtn.disabled = false;
+        return;
+      }
+      if (j.error === 'NOT_MEMBER'){
+        verifyBtn.textContent = 'Verify';
+        verifyBtn.disabled = false;
+        return toast('Please join the channel first, then try Verify again.');
+      }
+      verifyBtn.textContent = 'Verify';
+      verifyBtn.disabled = false;
+      toast(j.error || 'Verification failed');
+    }catch(e){
+      verifyBtn.textContent = 'Verify';
+      verifyBtn.disabled = false;
+      toast('Failed to reach server');
+    }
+  });
+
+  // (opsional) sinkron UI % referral dari server
+  (async function syncRefPct(){
+    try{
+      const r = await fetch('/api/user/get'); const j = await r.json();
+      const rp = Number(j.ref_percent || 10);
+      const badge = document.querySelector('.ref-badge'); if (badge) badge.textContent = `${rp}%`;
+      const home  = document.querySelector('.home-ref-card .muted'); if (home) home.textContent = `Get ${rp}% of their earnings`;
+      const hero  = document.querySelector('.ref-hero p.muted'); if (hero) hero.innerHTML = `Earn <strong>${rp}%</strong> of your friends earnings for life!`;
+    }catch{}
+  })();
+})();
+</script>
+          
 
   <!-- === TASK IKLAN (tetap) === -->
   <script>
