@@ -1,67 +1,50 @@
-const { q } = require('../_lib/db');
+// /api/withdraw/request.js  — GET: riwayat, POST: submit
+const { sql } = require('../_lib/db');          // path dari /api/withdraw/
 const { authFromHeader } = require('../_lib/auth');
 
-function validAddr(a){
-  // 0x + 40 hex ATAU "binance id" alfanumerik minimal 6
-  return /^(0x[0-9a-fA-F]{40}|[A-Za-z0-9._-]{6,})$/.test(a || '');
-}
-
 module.exports = async (req, res) => {
-  if (req.method !== 'POST')
-    return res.status(405).json({ ok:false, error:'METHOD_NOT_ALLOWED' });
-
-  const { ok, user, status } = await authFromHeader(req);
-  if (!ok) return res.status(status || 401).json({ ok:false, error:'AUTH_FAILED' });
-
-  let body = {};
-  try { body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {}); } catch {}
-
-  const amount  = Number(body.amount);
-  const address = (body.address || '').trim();
-
-  if (!amount || amount < 1)  return res.status(400).json({ ok:false, error:'BAD_AMOUNT' });
-  if (!validAddr(address))     return res.status(400).json({ ok:false, error:'BAD_ADDRESS' });
-
-  await q('BEGIN');
   try {
-    // Simpan/overwrite address user (opsional)
-    await q(
-      `UPDATE users SET address=$1, updated_at=now() WHERE id=$2`,
-      [address, user.id]
-    );
+    const a = await authFromHeader(req);
+    if (!a.ok || !a.user) {
+      return res.status(a.status || 401).json({ ok:false, error:'AUTH_FAILED' });
+    }
+    const uid = a.user.id;
 
-    // (Opsional) potong saldo saat request; hapus blok ini jika mau potong saat approve
-    const up = await q(
-      `UPDATE users SET balance = balance - $1, updated_at=now()
-       WHERE id=$2 AND balance >= $1
-       RETURNING balance`,
-      [amount, user.id]
-    );
-    if (!up.length) { await q('ROLLBACK'); return res.status(400).json({ ok:false, error:'INSUFFICIENT_BALANCE' }); }
-
-    // Simpan request ke salah satu tabel yg kamu punya
-    let inserted = false;
-    try {
-      await q(
-        `INSERT INTO withdraw_requests (user_id, amount, address, status, created_at)
-         VALUES ($1,$2,$3,'pending', now())`,
-        [user.id, amount, address]
-      );
-      inserted = true;
-    } catch (_) {}
-    if (!inserted) {
-      await q(
-        `INSERT INTO withdrawals (user_id, amount, address, status, created_at)
-         VALUES ($1,$2,$3,'pending', now())`,
-        [user.id, amount, address]
-      );
+    if (req.method === 'GET') {
+      const limit = Math.min(100, Math.max(1, Number(req.query.limit || 20)));
+      const rows = await sql`
+        SELECT id,
+               amount::numeric AS amount,
+               address,
+               status,
+               created_at
+        FROM withdraw_requests
+        WHERE user_id = ${uid}
+        ORDER BY created_at DESC
+        LIMIT ${limit}
+      `;
+      return res.json({ ok:true, items: rows });
     }
 
-    await q('COMMIT');
-    return res.json({ ok:true, balance: up[0].balance });
+    if (req.method === 'POST') {
+      let body = {};
+      try { body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {}); } catch {}
+      const amount  = Number(body.amount || 0);
+      const address = (body.address || '').trim();
+
+      if (!amount || amount < 1)   return res.status(400).json({ ok:false, error:'MIN_1_USD' });
+      if (!/^0x[a-fA-F0-9]{40}$/.test(address)) return res.status(400).json({ ok:false, error:'BAD_ADDRESS' });
+
+      await sql`
+        INSERT INTO withdraw_requests (user_id, amount, address, status)
+        VALUES (${uid}, ${amount}, ${address}, 'pending')
+      `;
+      return res.json({ ok:true, submitted:true });
+    }
+
+    return res.status(405).json({ ok:false, error:'METHOD_NOT_ALLOWED' });
   } catch (e) {
-    await q('ROLLBACK');
-    console.error('withdraw/request crash:', e);
-    return res.status(200).json({ ok:false, error:String(e?.message || e) });
+    console.error('withdraw/request error:', e);
+    return res.status(200).json({ ok:false, error:String(e?.message||e) });
   }
 };
