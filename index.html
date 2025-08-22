@@ -480,7 +480,7 @@
 
   async function fetchWithdrawHistory(){
     try{
-      const r = await fetch('/api/withdraw');        // GET = history
+      const r = await fetch('/api/withdraw/request');        // GET = history
       const j = await r.json();
       const items = Array.isArray(j?.items) ? j.items : [];
       if (!listEl) return;
