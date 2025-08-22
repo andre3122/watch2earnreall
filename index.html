@@ -552,5 +552,34 @@
 </script>
 
   <script src="./app.js" defer></script>
+<script>
+(function(){
+  async function refreshUserBasics(){
+    try{
+      const r = await fetch('/api/user/get');
+      const j = await r.json();
+      if (!j.ok) return;
+
+      // saldo header
+      const balEl = document.getElementById('balance');
+      if (balEl && j.user && j.user.balance != null) {
+        balEl.textContent = `$${Number(j.user.balance).toFixed(2)}`;
+      }
+
+      // referral percent UI (default 10%)
+      const rp = Number(j.ref_percent || 10);
+      const badge = document.querySelector('.ref-badge'); if (badge) badge.textContent = `${rp}%`;
+      const home  = document.querySelector('.home-ref-card .muted'); if (home) home.textContent = `Get ${rp}% of their earnings`;
+      const hero  = document.querySelector('.ref-hero p.muted'); if (hero) hero.innerHTML = `Earn <strong>${rp}%</strong> of your friends earnings for life!`;
+    }catch{}
+  }
+
+  // panggil saat load
+  document.addEventListener('DOMContentLoaded', refreshUserBasics);
+  // opsional: expose biar bisa dipanggil dari tempat lain
+  window.refreshUserBasics = refreshUserBasics;
+})();
+</script>
+
 </body>
 </html>
