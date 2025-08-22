@@ -550,7 +550,14 @@
   };
 })();
 </script>
-
+<script>
+  // Hapus semua .home-ref-card kecuali yang pertama di tab Home
+  document.addEventListener('DOMContentLoaded', () => {
+    const cards = document.querySelectorAll('#screen-home .home-ref-card');
+    cards.forEach((el, i) => { if (i > 0) el.remove(); });
+  });
+</script>
+  
   <script src="./app.js" defer></script>
 <script>
 (function(){
