@@ -473,6 +473,54 @@
     #btnWithdrawProxy:active{ transform: translateY(1px); }
     #btnWithdrawProxy:disabled{ opacity:.65; }
   </style>
+<script>
+/* Withdraw sekali klik: kirim amount + address langsung ke /api/withdraw/request */
+(function () {
+  const amountEl = document.getElementById('withdrawAmount');
+  const addrEl   = document.getElementById('bscAddress');
+  const balEl    = document.getElementById('balance');
+
+  // tombol bawah hasil merge card (id btnWithdrawProxy) atau fallback tombol addressForm
+  const btn = document.getElementById('btnWithdrawProxy')
+          || document.querySelector('#addressForm button[type="submit"]');
+  if (!amountEl || !addrEl || !btn) return;
+
+  // Terima 0x…40 hex ATAU binance id alfanumerik (>=6)
+  addrEl.setAttribute('pattern','^(0x[0-9a-fA-F]{40}|[A-Za-z0-9._-]{6,})$');
+
+  function toast(m){ try{Telegram.WebApp.showAlert(m);}catch{alert(m);} }
+
+  btn.onclick = async () => {
+    const amount  = Number(amountEl.value);
+    const address = (addrEl.value || '').trim();
+
+    if (!amount || amount < 1)  return toast('Minimum withdraw $1');
+    if (!address)               return toast('Fill your BEP20 address or Binance id.');
+
+    btn.disabled = true;
+    try {
+      const r = await fetch('/api/withdraw/request', {
+        method: 'POST',
+        headers: { 'Content-Type':'application/json' },
+        body: JSON.stringify({ amount, address })
+      });
+      const j = await r.json();
+
+      if (!j.ok) {
+        btn.disabled = false;
+        return toast(j.error || 'Withdraw failed');
+      }
+      if (balEl && j.balance != null) {
+        balEl.textContent = `$${Number(j.balance).toFixed(2)}`;
+      }
+      toast('Withdraw request submitted ✅');
+    } catch (e) {
+      btn.disabled = false;
+      toast('Failed to reach server');
+    }
+  };
+})();
+</script>
 
   <script src="./app.js" defer></script>
 </body>
