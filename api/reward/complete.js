@@ -1,4 +1,4 @@
-// api/reward/complete.js — kredit task + referral bonus
+// api/reward/complete.js — kredit task (ads) + task follow channel + referral bonus
 const { q } = require("../_lib/db");
 const { authFromHeader } = require("../_lib/auth");
 
@@ -8,6 +8,24 @@ const CREDIT_FORCE = String(process.env.CREDIT_FORCE || "0") === "1";
 const REF_PERCENT = Number(process.env.REF_PERCENT || 10);
 const TASKS = { ad1: 0.01, ad2: 0.01 };
 
+// === Tambahan: dukung task "follow:@channel" ===
+const BOT_TOKEN = process.env.BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN; // set salah satu di Vercel env
+const FOLLOW_REWARD = Number(process.env.FOLLOW_REWARD || 0.02);
+
+// cek membership channel via Bot API
+async function isChannelMember(chat, tgId) {
+  if (!BOT_TOKEN || !tgId) return false;
+  const url = `https://api.telegram.org/bot${BOT_TOKEN}/getChatMember?chat_id=${encodeURIComponent(chat)}&user_id=${encodeURIComponent(tgId)}`;
+  try {
+    const r = await fetch(url);
+    const j = await r.json();
+    const st = j?.result?.status;
+    return ["member","administrator","creator"].includes(st);
+  } catch {
+    return false;
+  }
+}
+
 module.exports = async (req, res) => {
   try {
     if (req.method !== "POST") return res.status(405).json({ ok:false, error:"METHOD_NOT_ALLOWED" });
@@ -15,10 +33,89 @@ module.exports = async (req, res) => {
     const { ok, status, user } = await authFromHeader(req);
     if (!ok || !user) return res.status(status || 401).json({ ok:false, error:"AUTH_FAILED" });
 
-    let body={}; try{ body=typeof req.body==="string"?JSON.parse(req.body):(req.body||{}) }catch{}
+    let body = {};
+    try { body = typeof req.body === "string" ? JSON.parse(req.body) : (req.body || {}); } catch {}
     const { task_id, token } = body || {};
     if (!task_id) return res.status(400).json({ ok:false, error:"BAD_INPUT" });
 
+    // ====== BRANCH BARU: Task Follow ======
+    if (String(task_id).startsWith("follow:")) {
+      const raw = String(task_id).split(":")[1] || "";
+      const chat = raw.startsWith("@") ? raw : `@${raw}`;
+
+      // ambil telegram id user (pakai yang dari auth, atau fallback dari DB)
+      let tgId = user.tg_id;
+      if (!tgId) {
+        const row = (await q(`SELECT tg_id FROM users WHERE id=$1 LIMIT 1`, [user.id]))[0];
+        tgId = row?.tg_id;
+      }
+      if (!tgId) return res.status(400).json({ ok:false, error:"NO_TG_ID" });
+      if (!BOT_TOKEN) return res.status(500).json({ ok:false, error:"BOT_TOKEN_MISSING" });
+
+      // sudah pernah di-kredit?
+      const refId = `follow:${raw}`;
+      const exist = await q(
+        `SELECT 1 FROM ledger WHERE user_id=$1 AND reason='follow' AND ref_id=$2 LIMIT 1`,
+        [user.id, refId]
+      );
+      if (exist.length) {
+        const bal = (await q(`SELECT balance FROM users WHERE id=$1`, [user.id]))[0]?.balance || 0;
+        return res.json({ ok:true, credited:false, already:true, balance: bal });
+      }
+
+      // cek membership
+      const okFollow = await isChannelMember(chat, tgId);
+      if (!okFollow) {
+        const bal = (await q(`SELECT balance FROM users WHERE id=$1`, [user.id]))[0]?.balance || 0;
+        return res.json({ ok:false, credited:false, reason:"NOT_MEMBER", balance: bal });
+      }
+
+      // kredit user
+      const up = (await q(
+        `UPDATE users SET balance = balance + $1::numeric, updated_at=now()
+           WHERE id=$2 RETURNING balance`,
+        [FOLLOW_REWARD, user.id]
+      ))[0];
+
+      await q(
+        `INSERT INTO ledger (user_id, amount, reason, ref_id)
+         VALUES ($1,$2::numeric,'follow',$3)`,
+        [user.id, FOLLOW_REWARD, refId]
+      );
+
+      // bonus referral (idempoten)
+      if (REF_PERCENT > 0) {
+        const ref = (await q(`SELECT ref_by FROM referrals WHERE user_id=$1 LIMIT 1`, [user.id]))[0];
+        if (ref && ref.ref_by) {
+          const e = await q(
+            `SELECT 1 FROM ledger WHERE reason='ref_bonus' AND ref_id=$1 LIMIT 1`,
+            [refId]
+          );
+          if (!e.length) {
+            const bonus = (await q(
+              `WITH b AS (SELECT ($1::numeric * $2::numeric / 100.0) AS amt)
+               INSERT INTO ledger (user_id, amount, reason, ref_id)
+               SELECT $3, b.amt, 'ref_bonus', $4 FROM b
+               RETURNING (SELECT amt FROM b) AS amt`,
+              [FOLLOW_REWARD, REF_PERCENT, ref.ref_by, refId]
+            ))[0]?.amt;
+
+            if (bonus && Number(bonus) > 0) {
+              await q(
+                `UPDATE users SET balance = balance + $1::numeric, updated_at=now()
+                 WHERE id=$2`,
+                [bonus, ref.ref_by]
+              );
+            }
+          }
+        }
+      }
+
+      return res.json({ ok:true, credited:true, amount: FOLLOW_REWARD, balance: up?.balance || 0 });
+    }
+    // ====== END Task Follow ======
+
+    // ====== Task Iklan (punyamu — tidak diubah) ======
     // 1) cari sesi user+task
     let text = `
       SELECT id, user_id, reward, status, created_at, token
@@ -100,7 +197,6 @@ module.exports = async (req, res) => {
           [refId]
         );
         if (!exist.length) {
-          // hitung bonus di SQL (numeric)
           const bonus = (await q(
             `WITH b AS (
                SELECT ($1::numeric * $2::numeric / 100.0) AS amt
