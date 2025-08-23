@@ -11,6 +11,29 @@ const TASKS = { ad1: 0.01, ad2: 0.01 };
 // === Tambahan: dukung task "follow:@channel" ===
 const BOT_TOKEN = process.env.BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN; // set salah satu di Vercel env
 const FOLLOW_REWARD = Number(process.env.FOLLOW_REWARD || 0.02);
+// === FOLLOW support ===
+const FOLLOW_REWARD = Number(process.env.FOLLOW_REWARD || 0.02);
+const TG_TOKEN = process.env.BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN;
+
+function isFollowTask(t) {
+  return typeof t === "string" && t.startsWith("follow:");
+}
+function parseFollowTarget(t) {
+  // terima -100... (chat_id) atau @username / username
+  const x = String(t).slice(7).trim();
+  if (!x) return null;
+  return x.startsWith("@") ? x : x; // biarkan apa adanya
+}
+
+async function getChatMember(chatId, userId) {
+  if (!TG_TOKEN) throw new Error("NO_BOT_TOKEN");
+  const url = `https://api.telegram.org/bot${TG_TOKEN}/getChatMember?` +
+              `chat_id=${encodeURIComponent(chatId)}&user_id=${encodeURIComponent(userId)}`;
+  const r = await fetch(url);
+  const j = await r.json();
+  if (!j.ok) throw new Error(j.description || "TG_FAIL");
+  return j.result; // {status: 'member'|'administrator'|'creator'|...}
+}
 
 // cek membership channel via Bot API
 async function isChannelMember(chat, tgId) {
@@ -114,6 +137,73 @@ module.exports = async (req, res) => {
       return res.json({ ok:true, credited:true, amount: FOLLOW_REWARD, balance: up?.balance || 0 });
     }
     // ====== END Task Follow ======
+// === FOLLOW CHANNEL task ===
+if (isFollowTask(task_id)) {
+  const target = parseFollowTarget(task_id);
+  if (!target) return res.json({ ok:false, error:"NO_TG_ID" });
+
+  // cek membership user di channel
+  let member = false;
+  try {
+    const cm = await getChatMember(target, user.id);
+    const s = cm?.status;
+    member = (s === "member" || s === "administrator" || s === "creator" || s === "restricted");
+  } catch (e) {
+    return res.json({ ok:false, error:"TG_CHECK_FAILED" });
+  }
+  if (!member) return res.json({ ok:false, error:"NOT_MEMBER" });
+
+  const refId = `follow:${target}`;
+  const exist = await q(
+    `SELECT 1 FROM ledger WHERE user_id=$1 AND reason='follow' AND ref_id=$2 LIMIT 1`,
+    [user.id, refId]
+  );
+  const amt = FOLLOW_REWARD;
+
+  if (!exist.length) {
+    const up = (await q(
+      `UPDATE users SET balance = balance + $1::numeric, updated_at=now()
+         WHERE id=$2 RETURNING balance`,
+      [amt, user.id]
+    ))[0];
+
+    await q(
+      `INSERT INTO ledger (user_id, amount, reason, ref_id)
+       VALUES ($1,$2::numeric,'follow',$3)`,
+      [user.id, amt, refId]
+    );
+
+    // referral bonus (idempoten)
+    if (REF_PERCENT > 0) {
+      const ref = (await q(`SELECT ref_by FROM referrals WHERE user_id=$1 LIMIT 1`, [user.id]))[0];
+      if (ref?.ref_by) {
+        const refKey = `follow:${target}:${user.id}`;
+        const done = await q(`SELECT 1 FROM ledger WHERE reason='ref_bonus' AND ref_id=$1 LIMIT 1`, [refKey]);
+        if (!done.length) {
+          const bonus = (await q(
+            `WITH b AS (SELECT ($1::numeric * $2::numeric / 100.0) AS amt)
+             INSERT INTO ledger (user_id, amount, reason, ref_id)
+             SELECT $3, b.amt, 'ref_bonus', $4 FROM b
+             RETURNING (SELECT amt FROM b) AS amt`,
+            [amt, REF_PERCENT, ref.ref_by, refKey]
+          ))[0]?.amt;
+          if (bonus && Number(bonus) > 0) {
+            await q(
+              `UPDATE users SET balance = balance + $1::numeric, updated_at=now()
+                 WHERE id=$2`,
+              [bonus, ref.ref_by]
+            );
+          }
+        }
+      }
+    }
+
+    return res.json({ ok:true, credited:true, amount: amt, balance: up?.balance || 0 });
+  } else {
+    const bal = (await q(`SELECT balance FROM users WHERE id=$1`, [user.id]))[0]?.balance || 0;
+    return res.json({ ok:true, credited:true, amount: amt, balance: bal });
+  }
+}
 
     // ====== Task Iklan (punyamu — tidak diubah) ======
     // 1) cari sesi user+task
