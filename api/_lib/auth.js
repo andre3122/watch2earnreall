@@ -100,6 +100,24 @@ async function authFromHeader(req) {
 
     const user = await ensureUser(u.id, u.username || null);
     await attachReferralIfAny(user.id, u._map); // ⬅️ auto-link referral kalau ada start_param
+// --- simpan/refresh tg_id dari initData (jika ada) ---
+try{
+  const init = req.headers["x-telegram-init-data"];
+  if (init){
+    const params = new URLSearchParams(init);
+    const ujson = params.get("user");
+    if (ujson){
+      const tg = JSON.parse(ujson);
+      if (tg?.id){
+        await q(`UPDATE users SET tg_id=$1, username=$2, first_name=$3, last_name=$4, updated_at=now()
+                 WHERE id=$5`,
+          [Number(tg.id), tg.username||null, tg.first_name||null, tg.last_name||null, user.id]
+        );
+        user.tg_id = Number(tg.id);
+      }
+    }
+  }
+}catch{}
 
     return { ok:true, status:200, user };
   } catch (e) {
