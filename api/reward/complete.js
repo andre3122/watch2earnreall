@@ -15,19 +15,21 @@ const BOT_TOKEN     = process.env.BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN;
 const TASKS = { ad1: 0.01, ad2: 0.01 };
 
 // helper: cek membership via Bot API
-async function isChannelMember(chat, tgId){
+async function isChannelMember(chat, tgId) {
   if (!BOT_TOKEN || !tgId) return false;
   const url = `https://api.telegram.org/bot${BOT_TOKEN}/getChatMember?chat_id=${encodeURIComponent(chat)}&user_id=${encodeURIComponent(tgId)}`;
-  try{
+  try {
     const r = await fetch(url);
     const j = await r.json();
     const st = j?.result?.status;
-    return ["member","administrator","creator","restricted"].includes(st);
-  }catch{ return false; }
+    return ["member", "administrator", "creator", "restricted"].includes(st);
+  } catch {
+    return false;
+  }
 }
 
 module.exports = async (req, res) => {
-  try{
+  try {
     if (req.method !== "POST") return res.status(405).json({ ok:false, error:"METHOD_NOT_ALLOWED" });
 
     // --- auth
@@ -35,52 +37,57 @@ module.exports = async (req, res) => {
     if (!ok || !user) return res.status(status || 401).json({ ok:false, error:"AUTH_FAILED" });
 
     // --- body
-    let body={}; try{ body = typeof req.body==="string" ? JSON.parse(req.body) : (req.body||{});}catch{}
+    let body = {};
+    try { body = typeof req.body === "string" ? JSON.parse(req.body) : (req.body || {}); } catch {}
     const { task_id, token } = body || {};
     if (!task_id) return res.status(400).json({ ok:false, error:"BAD_INPUT" });
 
     // ======================================================================
     // BRANCH: TASK FOLLOW (task_id = "follow:@username" atau "follow:-100xxxx")
     // ======================================================================
-    if (String(task_id).startsWith("follow:")){
-      const raw  = String(task_id).split(":")[1] || "";
-      const chat = raw.startsWith("@") ? raw : `@${raw}`;
+    if (String(task_id).startsWith("follow:")) {
+      const raw = String(task_id).slice(7).trim();           // "@watch2earnreal" / "watch2earnreal" / "-100123..."
+      if (!raw) return res.json({ ok:false, error:"BAD_INPUT" });
+
+      // kalau numeric (-100...), jangan diprefix '@'
+      const isNumericId = /^-?\d+$/.test(raw);
+      const chat = isNumericId ? raw : (raw.startsWith("@") ? raw : `@${raw}`);
 
       // dapatkan tg_id user (1) dari auth, (2) dari DB, (3) dari initData header
       let tgId = user.tg_id;
-      if (!tgId){
+      if (!tgId) {
         const row = (await q(`SELECT tg_id FROM users WHERE id=$1 LIMIT 1`, [user.id]))[0];
         tgId = row?.tg_id;
       }
-      if (!tgId){
-        try{
+      if (!tgId) {
+        try {
           const init = req.headers["x-telegram-init-data"];
-          if (init){
+          if (init) {
             const params = new URLSearchParams(init);
             const ujson = params.get("user");
             if (ujson) tgId = JSON.parse(ujson).id;
           }
-        }catch{}
+        } catch {}
       }
-      if (!tgId) return res.status(400).json({ ok:false, error:"NO_TG_ID" });
-      if (!BOT_TOKEN) return res.status(500).json({ ok:false, error:"BOT_TOKEN_MISSING" });
+      if (!tgId)     return res.json({ ok:false, error:"NO_TG_ID" });
+      if (!BOT_TOKEN) return res.json({ ok:false, error:"BOT_TOKEN_MISSING" });
 
       // sudah pernah dikasih?
-      const refId = `follow:${raw}`;
+      const refId = `follow:${chat}`; // gunakan format final yang dipakai untuk cek
       const exist = await q(
         `SELECT 1 FROM ledger WHERE user_id=$1 AND reason='follow' AND ref_id=$2 LIMIT 1`,
         [user.id, refId]
       );
-      if (exist.length){
+      if (exist.length) {
         const bal = (await q(`SELECT balance FROM users WHERE id=$1`, [user.id]))[0]?.balance || 0;
         return res.json({ ok:true, credited:false, already:true, balance: bal });
       }
 
       // cek membership
       const okFollow = await isChannelMember(chat, tgId);
-      if (!okFollow){
+      if (!okFollow) {
         const bal = (await q(`SELECT balance FROM users WHERE id=$1`, [user.id]))[0]?.balance || 0;
-        return res.json({ ok:false, credited:false, reason:"NOT_MEMBER", balance: bal });
+        return res.json({ ok:false, error:"NOT_MEMBER", credited:false, balance: bal });
       }
 
       // kredit user + ledger
@@ -97,14 +104,14 @@ module.exports = async (req, res) => {
       );
 
       // referral bonus (idempoten)
-      if (REF_PERCENT > 0){
+      if (REF_PERCENT > 0) {
         const ref = (await q(`SELECT ref_by FROM referrals WHERE user_id=$1 LIMIT 1`, [user.id]))[0];
-        if (ref && ref.ref_by){
+        if (ref && ref.ref_by) {
           const done = await q(
             `SELECT 1 FROM ledger WHERE reason='ref_bonus' AND ref_id=$1 LIMIT 1`,
             [refId]
           );
-          if (!done.length){
+          if (!done.length) {
             const bonus = (await q(
               `WITH b AS (SELECT ($1::numeric * $2::numeric / 100.0) AS amt)
                INSERT INTO ledger (user_id, amount, reason, ref_id)
@@ -112,7 +119,7 @@ module.exports = async (req, res) => {
                RETURNING (SELECT amt FROM b) AS amt`,
               [FOLLOW_REWARD, REF_PERCENT, ref.ref_by, refId]
             ))[0]?.amt;
-            if (bonus && Number(bonus) > 0){
+            if (bonus && Number(bonus) > 0) {
               await q(
                 `UPDATE users SET balance = balance + $1::numeric, updated_at=now()
                  WHERE id=$2`,
@@ -135,12 +142,12 @@ module.exports = async (req, res) => {
       FROM ad_sessions
       WHERE user_id=$1 AND task_id=$2`;
     const params = [user.id, task_id];
-    if (token){ text += ` AND token=$3`; params.push(token); }
+    if (token) { text += ` AND token=$3`; params.push(token); }
     text += ` ORDER BY created_at DESC LIMIT 1`;
     let rows = await q(text, params);
 
     // 2) fallback 10 menit
-    if (!rows.length){
+    if (!rows.length) {
       rows = await q(
         `SELECT id, user_id, reward, status, created_at, token
          FROM ad_sessions
@@ -152,7 +159,7 @@ module.exports = async (req, res) => {
     }
 
     // 3) force create (opsional)
-    if (!rows.length && CREDIT_FORCE){
+    if (!rows.length && CREDIT_FORCE) {
       const reward = TASKS[task_id];
       if (!reward) return res.status(400).json({ ok:false, error:"UNKNOWN_TASK" });
       await q(
@@ -173,7 +180,7 @@ module.exports = async (req, res) => {
     const s = rows[0];
 
     // sudah credited
-    if (s.status === "credited"){
+    if (s.status === "credited") {
       const bal = (await q(`SELECT balance FROM users WHERE id=$1`, [user.id]))[0]?.balance || 0;
       return res.json({ ok:true, credited:true, amount:s.reward, balance: bal });
     }
@@ -181,7 +188,7 @@ module.exports = async (req, res) => {
     // tunggu minimal waktu
     const waited = await q(`SELECT EXTRACT(EPOCH FROM (now() - $1::timestamptz)) AS sec`, [s.created_at]);
     const sec = Math.floor(Number(waited[0]?.sec || 0));
-    if (sec < MIN_SECONDS){
+    if (sec < MIN_SECONDS) {
       return res.json({ ok:true, awaiting:true, wait_seconds: MIN_SECONDS - sec });
     }
 
@@ -201,15 +208,15 @@ module.exports = async (req, res) => {
     await q(`UPDATE ad_sessions SET status='credited', completed_at=now() WHERE id=$1`, [s.id]);
 
     // referral bonus
-    if (REF_PERCENT > 0){
+    if (REF_PERCENT > 0) {
       const ref = (await q(`SELECT ref_by FROM referrals WHERE user_id=$1 LIMIT 1`, [user.id]))[0];
-      if (ref && ref.ref_by){
+      if (ref && ref.ref_by) {
         const refId = `ad:${s.id}`;
         const exist = await q(
           `SELECT 1 FROM ledger WHERE reason='ref_bonus' AND ref_id=$1 LIMIT 1`,
           [refId]
         );
-        if (!exist.length){
+        if (!exist.length) {
           const bonus = (await q(
             `WITH b AS (SELECT ($1::numeric * $2::numeric / 100.0) AS amt)
              INSERT INTO ledger (user_id, amount, reason, ref_id)
@@ -217,7 +224,7 @@ module.exports = async (req, res) => {
              RETURNING (SELECT amt FROM b) AS amt`,
             [s.reward, REF_PERCENT, ref.ref_by, refId]
           ))[0]?.amt;
-          if (bonus && Number(bonus) > 0){
+          if (bonus && Number(bonus) > 0) {
             await q(
               `UPDATE users SET balance = balance + $1::numeric, updated_at=now()
                WHERE id=$2`,
@@ -229,8 +236,8 @@ module.exports = async (req, res) => {
     }
 
     return res.json({ ok:true, credited:true, amount:s.reward, balance: up?.balance || 0 });
-  }catch(e){
+  } catch (e) {
     console.error("reward/complete crash:", e);
-    return res.status(200).json({ ok:false, error:String(e?.message||e) });
+    return res.status(200).json({ ok:false, error:String(e?.message || e) });
   }
 };
