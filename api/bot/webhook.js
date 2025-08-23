@@ -51,7 +51,7 @@ module.exports = async (req, res) => {
 
       await tg("sendMessage", {
         chat_id,
-        text: "Welcome To Watch2earnreall_bot || Open Mini App To Start Earn Real Money By Watching Ads And Completing Task You Can Widraw Instantly At Any Time .",
+        text: "Welcome To Watch2earnreall_bot || Open Mini App To Start Earn By Watching Ads And Completing Task.",
         reply_markup: {
           inline_keyboard: [[
             { text: "Open Mini App ▶️", web_app: { url: webUrl } }
