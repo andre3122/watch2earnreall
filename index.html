@@ -22,9 +22,9 @@
   <div id="app" class="app">
     <header class="app-header">
       <div class="brand">
-        <div class="logo-glow"></div>
-        <span class="brand-title">Watch2Earn<span class="accent">Reall</span></span>
-      </div>
+  <img class="app-logo" src="https://i.imgur.com/5usp3qX.png" alt="Logo">
+  <span class="brand-title">Watch2Earn<span class="accent">Reall</span></span>
+</div>
       <div class="coins">
         <span id="balance">$0.00</span>
       </div>
@@ -501,6 +501,12 @@
   .wd-badge.pending{  background:#fff7e6; border-color:#ffd18a; color:#a86b00; }
   .wd-badge.approved{ background:#e9ffef; border-color:#88e09d; color:#0c7a2b; }
   .wd-badge.rejected{ background:#ffe9ec; border-color:#ff9aa6; color:#b11d2a; }
+</style>
+<style>
+  .app-header .brand{display:flex;align-items:center;gap:10px}
+  .app-header .app-logo{width:28px;height:28px;border-radius:8px;object-fit:cover;display:block}
+  /* opsional: kalau masih ada sisa efek lama */
+  .app-header .logo-glow{display:none}
 </style>
 
 <script>
