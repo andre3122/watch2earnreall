@@ -1,4 +1,4 @@
-// api/reward/complete.js — task ads + task follow channel + referral bonus
+// api/reward/complete.js — task ads + task follow channel + referral bonus (tahan banting)
 const { q } = require("../_lib/db");
 const { authFromHeader } = require("../_lib/auth");
 
@@ -14,7 +14,7 @@ const BOT_TOKEN     = process.env.BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN;
 // daftar task iklan (tetap)
 const TASKS = { ad1: 0.01, ad2: 0.01 };
 
-// helper: cek membership via Bot API
+// ---- helpers --------------------------------------------------------------
 async function isChannelMember(chat, tgId) {
   if (!BOT_TOKEN || !tgId) return false;
   const url = `https://api.telegram.org/bot${BOT_TOKEN}/getChatMember?chat_id=${encodeURIComponent(chat)}&user_id=${encodeURIComponent(tgId)}`;
@@ -23,57 +23,77 @@ async function isChannelMember(chat, tgId) {
     const j = await r.json();
     const st = j?.result?.status;
     return ["member", "administrator", "creator", "restricted"].includes(st);
+  } catch { return false; }
+}
+
+// Deteksi nama kolom referrer di tabel `referrals`
+async function getReferrerId(userId) {
+  try {
+    const cols = await q(
+      `SELECT column_name FROM information_schema.columns
+       WHERE table_schema='public' AND table_name='referrals'`
+    );
+    const names = cols.map(r => r.column_name);
+    const refCol = ["ref_by", "referrer_id", "referred_by", "referrer"]
+      .find(n => names.includes(n));
+    if (!refCol) return null;
+
+    const row = (await q(
+      `SELECT ${refCol} AS ref_by FROM referrals WHERE user_id=$1 LIMIT 1`,
+      [userId]
+    ))[0];
+    return row?.ref_by || null;
   } catch {
-    return false;
+    return null;
   }
 }
 
+// --------------------------------------------------------------------------
 module.exports = async (req, res) => {
   try {
     if (req.method !== "POST") return res.status(405).json({ ok:false, error:"METHOD_NOT_ALLOWED" });
 
-    // --- auth
+    // auth
     const { ok, status, user } = await authFromHeader(req);
     if (!ok || !user) return res.status(status || 401).json({ ok:false, error:"AUTH_FAILED" });
 
-    // --- body
+    // body
     let body = {};
     try { body = typeof req.body === "string" ? JSON.parse(req.body) : (req.body || {}); } catch {}
     const { task_id, token } = body || {};
     if (!task_id) return res.status(400).json({ ok:false, error:"BAD_INPUT" });
 
     // ======================================================================
-    // BRANCH: TASK FOLLOW (task_id = "follow:@username" atau "follow:-100xxxx")
+    // TASK FOLLOW (task_id = "follow:@username" atau "follow:-100xxxx")
     // ======================================================================
     if (String(task_id).startsWith("follow:")) {
-      const raw = String(task_id).slice(7).trim();           // "@watch2earnreal" / "watch2earnreal" / "-100123..."
+      const raw = String(task_id).slice(7).trim();
       if (!raw) return res.json({ ok:false, error:"BAD_INPUT" });
 
-      // kalau numeric (-100...), jangan diprefix '@'
+      // jika numeric id (-100...), jangan ditambah '@'
       const isNumericId = /^-?\d+$/.test(raw);
       const chat = isNumericId ? raw : (raw.startsWith("@") ? raw : `@${raw}`);
 
-      // dapatkan tg_id user (1) dari auth, (2) dari DB, (3) dari initData header
+      // ambil tg_id user dari auth → DB → initData
       let tgId = user.tg_id;
       if (!tgId) {
-        const row = (await q(`SELECT tg_id FROM users WHERE id=$1 LIMIT 1`, [user.id]))[0];
-        tgId = row?.tg_id;
+        tgId = (await q(`SELECT tg_id FROM users WHERE id=$1 LIMIT 1`, [user.id]))[0]?.tg_id;
       }
       if (!tgId) {
         try {
           const init = req.headers["x-telegram-init-data"];
           if (init) {
-            const params = new URLSearchParams(init);
-            const ujson = params.get("user");
+            const p = new URLSearchParams(init);
+            const ujson = p.get("user");
             if (ujson) tgId = JSON.parse(ujson).id;
           }
         } catch {}
       }
-      if (!tgId)     return res.json({ ok:false, error:"NO_TG_ID" });
+      if (!tgId)      return res.json({ ok:false, error:"NO_TG_ID" });
       if (!BOT_TOKEN) return res.json({ ok:false, error:"BOT_TOKEN_MISSING" });
 
-      // sudah pernah dikasih?
-      const refId = `follow:${chat}`; // gunakan format final yang dipakai untuk cek
+      // sudah pernah dikredit?
+      const refId = `follow:${chat}`;
       const exist = await q(
         `SELECT 1 FROM ledger WHERE user_id=$1 AND reason='follow' AND ref_id=$2 LIMIT 1`,
         [user.id, refId]
@@ -83,14 +103,14 @@ module.exports = async (req, res) => {
         return res.json({ ok:true, credited:false, already:true, balance: bal });
       }
 
-      // cek membership
+      // cek membership channel
       const okFollow = await isChannelMember(chat, tgId);
       if (!okFollow) {
         const bal = (await q(`SELECT balance FROM users WHERE id=$1`, [user.id]))[0]?.balance || 0;
         return res.json({ ok:false, error:"NOT_MEMBER", credited:false, balance: bal });
       }
 
-      // kredit user + ledger
+      // kredit user + ledger (selalu jalan)
       const up = (await q(
         `UPDATE users SET balance = balance + $1::numeric, updated_at=now()
          WHERE id=$2 RETURNING balance`,
@@ -103,40 +123,44 @@ module.exports = async (req, res) => {
         [user.id, FOLLOW_REWARD, refId]
       );
 
-      // referral bonus (idempoten)
-      if (REF_PERCENT > 0) {
-        const ref = (await q(`SELECT ref_by FROM referrals WHERE user_id=$1 LIMIT 1`, [user.id]))[0];
-        if (ref && ref.ref_by) {
-          const done = await q(
-            `SELECT 1 FROM ledger WHERE reason='ref_bonus' AND ref_id=$1 LIMIT 1`,
-            [refId]
-          );
-          if (!done.length) {
-            const bonus = (await q(
-              `WITH b AS (SELECT ($1::numeric * $2::numeric / 100.0) AS amt)
-               INSERT INTO ledger (user_id, amount, reason, ref_id)
-               SELECT $3, b.amt, 'ref_bonus', $4 FROM b
-               RETURNING (SELECT amt FROM b) AS amt`,
-              [FOLLOW_REWARD, REF_PERCENT, ref.ref_by, refId]
-            ))[0]?.amt;
-            if (bonus && Number(bonus) > 0) {
-              await q(
-                `UPDATE users SET balance = balance + $1::numeric, updated_at=now()
-                 WHERE id=$2`,
-                [bonus, ref.ref_by]
-              );
+      // bonus referral → jangan bikin gagal kalau struktur tabel beda
+      try {
+        if (REF_PERCENT > 0) {
+          const refBy = await getReferrerId(user.id);
+          if (refBy) {
+            const done = await q(
+              `SELECT 1 FROM ledger WHERE reason='ref_bonus' AND ref_id=$1 LIMIT 1`,
+              [refId]
+            );
+            if (!done.length) {
+              const bonus = (await q(
+                `WITH b AS (SELECT ($1::numeric * $2::numeric / 100.0) AS amt)
+                 INSERT INTO ledger (user_id, amount, reason, ref_id)
+                 SELECT $3, b.amt, 'ref_bonus', $4 FROM b
+                 RETURNING (SELECT amt FROM b) AS amt`,
+                [FOLLOW_REWARD, REF_PERCENT, refBy, refId]
+              ))[0]?.amt;
+              if (bonus && Number(bonus) > 0) {
+                await q(
+                  `UPDATE users SET balance = balance + $1::numeric, updated_at=now()
+                   WHERE id=$2`,
+                  [bonus, refBy]
+                );
+              }
             }
           }
         }
+      } catch (e) {
+        console.warn("referral bonus skipped:", e?.message || e);
+        // sengaja di-skip agar tidak membatalkan kredit utama
       }
 
       return res.json({ ok:true, credited:true, amount: FOLLOW_REWARD, balance: up?.balance || 0 });
     }
 
     // ======================================================================
-    // BRANCH: TASK IKLAN (punyamu — tidak diubah)
+    // TASK IKLAN (tidak diubah)
     // ======================================================================
-    // 1) cari sesi
     let text = `
       SELECT id, user_id, reward, status, created_at, token
       FROM ad_sessions
@@ -146,7 +170,6 @@ module.exports = async (req, res) => {
     text += ` ORDER BY created_at DESC LIMIT 1`;
     let rows = await q(text, params);
 
-    // 2) fallback 10 menit
     if (!rows.length) {
       rows = await q(
         `SELECT id, user_id, reward, status, created_at, token
@@ -158,7 +181,6 @@ module.exports = async (req, res) => {
       );
     }
 
-    // 3) force create (opsional)
     if (!rows.length && CREDIT_FORCE) {
       const reward = TASKS[task_id];
       if (!reward) return res.status(400).json({ ok:false, error:"UNKNOWN_TASK" });
@@ -179,20 +201,17 @@ module.exports = async (req, res) => {
     if (!rows.length) return res.status(404).json({ ok:false, error:"NO_SESSION" });
     const s = rows[0];
 
-    // sudah credited
     if (s.status === "credited") {
       const bal = (await q(`SELECT balance FROM users WHERE id=$1`, [user.id]))[0]?.balance || 0;
       return res.json({ ok:true, credited:true, amount:s.reward, balance: bal });
     }
 
-    // tunggu minimal waktu
     const waited = await q(`SELECT EXTRACT(EPOCH FROM (now() - $1::timestamptz)) AS sec`, [s.created_at]);
     const sec = Math.floor(Number(waited[0]?.sec || 0));
     if (sec < MIN_SECONDS) {
       return res.json({ ok:true, awaiting:true, wait_seconds: MIN_SECONDS - sec });
     }
 
-    // kredit user
     const up = (await q(
       `UPDATE users SET balance = balance + $1::numeric, updated_at=now()
        WHERE id=$2 RETURNING balance`,
@@ -207,31 +226,34 @@ module.exports = async (req, res) => {
 
     await q(`UPDATE ad_sessions SET status='credited', completed_at=now() WHERE id=$1`, [s.id]);
 
-    // referral bonus
     if (REF_PERCENT > 0) {
-      const ref = (await q(`SELECT ref_by FROM referrals WHERE user_id=$1 LIMIT 1`, [user.id]))[0];
-      if (ref && ref.ref_by) {
-        const refId = `ad:${s.id}`;
-        const exist = await q(
-          `SELECT 1 FROM ledger WHERE reason='ref_bonus' AND ref_id=$1 LIMIT 1`,
-          [refId]
-        );
-        if (!exist.length) {
-          const bonus = (await q(
-            `WITH b AS (SELECT ($1::numeric * $2::numeric / 100.0) AS amt)
-             INSERT INTO ledger (user_id, amount, reason, ref_id)
-             SELECT $3, b.amt, 'ref_bonus', $4 FROM b
-             RETURNING (SELECT amt FROM b) AS amt`,
-            [s.reward, REF_PERCENT, ref.ref_by, refId]
-          ))[0]?.amt;
-          if (bonus && Number(bonus) > 0) {
-            await q(
-              `UPDATE users SET balance = balance + $1::numeric, updated_at=now()
-               WHERE id=$2`,
-              [bonus, ref.ref_by]
-            );
+      try {
+        const refBy = await getReferrerId(user.id);
+        if (refBy) {
+          const refId = `ad:${s.id}`;
+          const exist = await q(
+            `SELECT 1 FROM ledger WHERE reason='ref_bonus' AND ref_id=$1 LIMIT 1`,
+            [refId]
+          );
+          if (!exist.length) {
+            const bonus = (await q(
+              `WITH b AS (SELECT ($1::numeric * $2::numeric / 100.0) AS amt)
+               INSERT INTO ledger (user_id, amount, reason, ref_id)
+               SELECT $3, b.amt, 'ref_bonus', $4 FROM b
+               RETURNING (SELECT amt FROM b) AS amt`,
+              [s.reward, REF_PERCENT, refBy, refId]
+            ))[0]?.amt;
+            if (bonus && Number(bonus) > 0) {
+              await q(
+                `UPDATE users SET balance = balance + $1::numeric, updated_at=now()
+                 WHERE id=$2`,
+                [bonus, refBy]
+              );
+            }
           }
         }
+      } catch (e) {
+        console.warn("referral bonus (ads) skipped:", e?.message || e);
       }
     }
 
