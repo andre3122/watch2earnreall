@@ -13,7 +13,7 @@ const BOT_TOKEN     = process.env.BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN;
 const MAX_ADS_PER_DAY = Number(process.env.MAX_ADS_PER_DAY || 50);
 
 // daftar task iklan (tetap)
-const TASKS = { ad1: 0.01, ad2: 0.01 };
+const TASKS = { ad1: 0.01, };
 
 // ---- helpers --------------------------------------------------------------
 async function isChannelMember(chat, tgId) {
