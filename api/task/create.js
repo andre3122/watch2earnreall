@@ -3,7 +3,7 @@ const crypto = require("crypto");
 const { q } = require("../_lib/db");
 const { authFromHeader } = require("../_lib/auth");
 
-const TASKS = { ad1: 0.01, ad2: 0.01 };
+const TASKS = { ad1: 0.01, };
 const MAX_ADS_PER_DAY = Number(process.env.MAX_ADS_PER_DAY || 50);
 const MIN_SECONDS = Number(process.env.TASK_MIN_SECONDS || 16);
 
