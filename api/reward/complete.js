@@ -141,7 +141,7 @@ module.exports = async (req, res) => {
                  RETURNING (SELECT amt FROM b) AS amt`,
                 [FOLLOW_REWARD, REF_PERCENT, refBy, refId]
               ))[0]?.amt;
-              if (bonus && Number(bonus) > 0) {
+              if (Number(bonus) > 0) {
                 await q(
                   `UPDATE users SET balance = balance + $1::numeric, updated_at=now()
                    WHERE id=$2`,
@@ -153,7 +153,6 @@ module.exports = async (req, res) => {
         }
       } catch (e) {
         console.warn("referral bonus skipped:", e?.message || e);
-        // sengaja di-skip agar tidak membatalkan kredit utama
       }
 
       return res.json({ ok:true, credited:true, amount: FOLLOW_REWARD, balance: up?.balance || 0 });
@@ -162,27 +161,29 @@ module.exports = async (req, res) => {
     // ======================================================================
     // TASK IKLAN (tidak diubah)
     // ======================================================================
+
     // ===== LIMIT HARIAN untuk task iklan (ad_complete) =====
-try {
-  const rowCnt = await q(
-    `SELECT COUNT(*)::int AS c
-       FROM ledger
-      WHERE user_id = $1
-        AND reason  = 'ad_complete'
-        AND created_at::date = CURRENT_DATE`,
-    [user.id]
-  );
-  const doneToday = rowCnt[0]?.c || 0;
-  if (doneToday >= MAX_ADS_PER_DAY) {
-    return res.json({
-      ok: false,
-      error: 'DAILY_LIMIT',
-      max: MAX_ADS_PER_DAY,
-      done_today: doneToday
-    });
-  }
-} catch {}
-// ===== END LIMIT HARIAN =====
+    try {
+      const rowCnt = await q(
+        `SELECT COUNT(*)::int AS c
+           FROM ledger
+          WHERE user_id = $1
+            AND reason  = 'ad_complete'
+            AND created_at::date = CURRENT_DATE`,
+        [user.id]
+      );
+      const doneToday = rowCnt[0]?.c || 0;
+      if (doneToday >= MAX_ADS_PER_DAY) {
+        return res.json({
+          ok: false,
+          error: 'DAILY_LIMIT',
+          max: MAX_ADS_PER_DAY,
+          done_today: doneToday
+        });
+      }
+    } catch {}
+    // ===== END LIMIT HARIAN =====
+
     let text = `
       SELECT id, user_id, reward, status, created_at, token
       FROM ad_sessions
@@ -265,7 +266,7 @@ try {
                RETURNING (SELECT amt FROM b) AS amt`,
               [s.reward, REF_PERCENT, refBy, refId]
             ))[0]?.amt;
-            if (bonus && Number(bonus) > 0) {
+            if (Number(bonus) > 0) {
               await q(
                 `UPDATE users SET balance = balance + $1::numeric, updated_at=now()
                  WHERE id=$2`,
