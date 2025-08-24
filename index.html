@@ -362,7 +362,10 @@
               body: JSON.stringify({ task_id: taskId, token: c1.token })
             });
             const j=await r2.json();
-
+            if (j && j.error === 'DAILY_LIMIT'){
+  setLabel(btn, 'Daily limit reached');
+  return;
+}
             if (j.awaiting && j.wait_seconds){
               let w=Number(j.wait_seconds);
               while(w>0){ setLabel(btn,`Verifying ${w}s`); await new Promise(r=>setTimeout(r,1000)); w--; }
