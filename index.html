@@ -345,8 +345,10 @@
             body: JSON.stringify({ task_id: taskId })
           });
           const c1=await r1.json();
-          if (!c1.ok){ setLabel(btn,'Failed'); return; }
-
+          if (!c1.ok){
+  setLabel(btn, c1.error === 'DAILY_LIMIT' ? 'Daily limit reached' : 'Failed');
+  return;
+}
           // Countdown
           let left=Number(c1.wait_seconds||16);
           while(left>0){ setLabel(btn,`Watching ${left}s`); await new Promise(r=>setTimeout(r,1000)); left--; }
