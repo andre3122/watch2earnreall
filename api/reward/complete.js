@@ -10,6 +10,7 @@ const CREDIT_FORCE = String(process.env.CREDIT_FORCE || "0") === "1";
 const REF_PERCENT   = Number(process.env.REF_PERCENT || 10);
 const FOLLOW_REWARD = Number(process.env.FOLLOW_REWARD || 0.02);
 const BOT_TOKEN     = process.env.BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN;
+const MAX_ADS_PER_DAY = Number(process.env.MAX_ADS_PER_DAY || 50);
 
 // daftar task iklan (tetap)
 const TASKS = { ad1: 0.01, ad2: 0.01 };
@@ -161,6 +162,27 @@ module.exports = async (req, res) => {
     // ======================================================================
     // TASK IKLAN (tidak diubah)
     // ======================================================================
+    // ===== LIMIT HARIAN untuk task iklan (ad_complete) =====
+try {
+  const rowCnt = await q(
+    `SELECT COUNT(*)::int AS c
+       FROM ledger
+      WHERE user_id = $1
+        AND reason  = 'ad_complete'
+        AND created_at::date = CURRENT_DATE`,
+    [user.id]
+  );
+  const doneToday = rowCnt[0]?.c || 0;
+  if (doneToday >= MAX_ADS_PER_DAY) {
+    return res.json({
+      ok: false,
+      error: 'DAILY_LIMIT',
+      max: MAX_ADS_PER_DAY,
+      done_today: doneToday
+    });
+  }
+} catch {}
+// ===== END LIMIT HARIAN =====
     let text = `
       SELECT id, user_id, reward, status, created_at, token
       FROM ad_sessions
