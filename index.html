@@ -680,5 +680,40 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 </script>
+<script>
+  const { animate, spring } = window.motion;
+
+  // Efek tombol klik
+  document.querySelectorAll('.btn, .btn-cta').forEach(btn => {
+    btn.addEventListener('pointerdown', () => animate(btn, { scale: 0.96 }, { duration: 0.08 }));
+    btn.addEventListener('pointerup',   () => animate(btn, { scale: 1 }, { type: spring({ mass:.3 }) }));
+  });
+
+  // Efek hover kartu (contoh follow channel card)
+  document.querySelectorAll('.task-card').forEach(card => {
+    card.addEventListener('pointerenter', () => animate(card, { y: -4 }, { duration: 0.18 }));
+    card.addEventListener('pointerleave', () => animate(card, { y: 0 }, { duration: 0.18 }));
+  });
+
+  // Animasi tombol Verify → loading → done
+  const verifyBtn = document.querySelector('button.verify');
+  if (verifyBtn){
+    verifyBtn.addEventListener('click', async () => {
+      verifyBtn.disabled = true;
+      const old = verifyBtn.textContent;
+      verifyBtn.textContent = "Validating…";
+      const pulse = animate(verifyBtn, { opacity:[1,.7,1] }, { duration:.8, repeat:Infinity });
+
+      // TODO: ganti dengan fetch('/api/verify') kamu
+      await new Promise(r => setTimeout(r,1500));
+
+      pulse.cancel();
+      verifyBtn.textContent = "Done ✓";
+      animate(verifyBtn, { scale:[1,1.06,1] }, { duration:.22 });
+
+      setTimeout(()=>{ verifyBtn.textContent = old; verifyBtn.disabled=false; }, 1000);
+    });
+  }
+</script>
 </body>
 </html>
