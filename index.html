@@ -661,15 +661,10 @@ document.addEventListener('DOMContentLoaded', () => {
       btn._busy = true;
 
       const label = btn.textContent;
-      btn.textContent = 'Validating…';
-      const pulse = M.animate(btn, { opacity: [1,.7,1] }, { duration: .8, repeat: Infinity });
-
       // === TODO: tetap pakai flow server kamu ===
       // di sini biasanya app.js sudah memanggil endpoint /api/reward/complete
       // jadi patch ini hanya efek visual. Kalau kamu mau, kita bisa hubungkan ke call existing.
       await new Promise(r => setTimeout(r, 1200));
-
-      pulse.cancel();
       btn.textContent = 'Done ✓';
       M.animate(btn, { scale: [1,1.06,1] }, { duration: .22 });
 
@@ -701,13 +696,8 @@ document.addEventListener('DOMContentLoaded', () => {
     verifyBtn.addEventListener('click', async () => {
       verifyBtn.disabled = true;
       const old = verifyBtn.textContent;
-      verifyBtn.textContent = "Validating…";
-      const pulse = animate(verifyBtn, { opacity:[1,.7,1] }, { duration:.8, repeat:Infinity });
-
       // TODO: ganti dengan fetch('/api/verify') kamu
       await new Promise(r => setTimeout(r,1500));
-
-      pulse.cancel();
       verifyBtn.textContent = "Done ✓";
       animate(verifyBtn, { scale:[1,1.06,1] }, { duration:.22 });
 
