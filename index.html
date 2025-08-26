@@ -17,6 +17,13 @@
   <link href="https://unpkg.com/@fontsource/poppins@5.0.8/400.css" rel="stylesheet">
   <link href="https://unpkg.com/@fontsource/poppins@5.0.8/600.css" rel="stylesheet">
   <link rel="stylesheet" href="./assets/css/styles.css"/>
+<!-- Motion One (untuk animasi halus) -->
+<script src="https://cdn.jsdelivr.net/npm/motion@10.16.2/dist/motion.umd.min.js"></script>
+<style>
+  /* Subtle hover untuk card (fallback kalau JS mati) */
+  .task-card{ transition: transform .18s ease, box-shadow .18s ease; }
+  .task-card:hover{ transform: translateY(-3px); }
+</style>
 </head>
 <body>
   <div id="app" class="app">
@@ -601,6 +608,77 @@
 document.addEventListener('DOMContentLoaded', () => {
   document.querySelector('.tasks-list [data-task-id="ad2"]')?.remove();
 });
+</script>
+  <script>
+  // Pastikan Motion sudah ada
+  const M = window.motion;
+
+  // 1) Animasi tekan untuk semua tombol (kelas .btn)
+  document.querySelectorAll('.btn').forEach(btn => {
+    btn.addEventListener('pointerdown', () => M.animate(btn, { scale: 0.96 }, { duration: 0.08 }));
+    const back = () => M.animate(btn, { scale: 1 }, { duration: 0.12 });
+    btn.addEventListener('pointerup', back);
+    btn.addEventListener('pointerleave', back);
+  });
+
+  // 2) Hover lift untuk task-card (JS version – lebih halus)
+  document.querySelectorAll('.task-card').forEach(card => {
+    card.addEventListener('pointerenter', () => M.animate(card, { y: -4, boxShadow: '0 14px 34px rgba(2,6,23,.22)' }, { duration: .18 }));
+    card.addEventListener('pointerleave', () => M.animate(card, { y: 0,  boxShadow: '0 12px 30px rgba(2,6,23,.20)' }, { duration: .18 }));
+  });
+
+  // 3) Balance naik smooth: override setBalance() yang lama dengan animasi
+  (function(){
+    const balEl = document.getElementById('balance');
+    if (!balEl || !window.setBalance) return;
+
+    const rawNumber = () => {
+      // ambil angka dari teks "$0.00"
+      const m = (balEl.textContent || '').match(/([0-9]+(?:\\.[0-9]+)?)/);
+      return m ? parseFloat(m[1]) : 0;
+    };
+
+    const _setBalance = window.setBalance; // simpan aslinya
+
+    window.setBalance = function(n){
+      const target = Number(n);
+      const from = rawNumber();
+      // animasi angka
+      M.animate(from, target, {
+        duration: 0.45,
+        easing: 'ease-out',
+        onUpdate: v => { balEl.textContent = `$${(Math.round(v*100)/100).toFixed(2)}`; }
+      });
+      // tetap update state internal app.js
+      _setBalance(target);
+    };
+  })();
+
+  // 4) Feedback ketika klik tombol "Watch Ad"
+  document.querySelectorAll('[data-action=\"watch\"], .btn-cta').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (btn._busy) return;
+      btn._busy = true;
+
+      const label = btn.textContent;
+      btn.textContent = 'Validating…';
+      const pulse = M.animate(btn, { opacity: [1,.7,1] }, { duration: .8, repeat: Infinity });
+
+      // === TODO: tetap pakai flow server kamu ===
+      // di sini biasanya app.js sudah memanggil endpoint /api/reward/complete
+      // jadi patch ini hanya efek visual. Kalau kamu mau, kita bisa hubungkan ke call existing.
+      await new Promise(r => setTimeout(r, 1200));
+
+      pulse.cancel();
+      btn.textContent = 'Done ✓';
+      M.animate(btn, { scale: [1,1.06,1] }, { duration: .22 });
+
+      // contoh: tambah 0.01 (hapus jika sudah dihandle server)
+      // window.setBalance && window.setBalance((window.state?.balance||0) + 0.01);
+
+      setTimeout(() => { btn.textContent = label; btn._busy = false; }, 800);
+    });
+  });
 </script>
 </body>
 </html>
