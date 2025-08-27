@@ -270,4 +270,33 @@ body.modal-open .tabbar{ pointer-events:none; opacity:.85; }
 .ref-count-badge{ width:44px; height:44px; border-radius:999px; display:grid; place-items:center; background:#eef2f7; border:1px solid var(--line); color:#0b1220; font-weight:800; }
 .ref-search-row input{ width:100%; height:42px; border:1px solid var(--line); border-radius:12px; padding:0 12px; background:#fff; margin-bottom:8px; }
 .ref-empty{ color:var(--muted); }
+/* === Neon glow background + overlay verifying (addon) === */
+.app { position: relative; }
+.app::before,
+.app::after {
+  content: ""; position: absolute; pointer-events: none; z-index: 0;
+  filter: blur(60px); border-radius: 999px;
+}
+.app::before { top:-80px; left:-60px; width:320px; height:320px; background: rgba(16,185,129,.15); }
+.app::after  { top:160px; right:-40px; width:320px; height:320px; background: rgba(217,70,239,.15); }
+
+/* header sedikit lebih “glass” di atas glow */
+.app-header { backdrop-filter: blur(10px); }
+
+/* card hover halus (kalau belum ada) */
+.task-card { transition: transform .18s ease, box-shadow .18s ease; box-shadow: 0 12px 30px rgba(2,6,23,.10); }
+.task-card:hover { transform: translateY(-4px); box-shadow: 0 14px 34px rgba(2,6,23,.16); }
+
+/* Overlay verifying */
+#ov { position: fixed; inset: 0; display: none; place-items: center;
+  background: rgba(0,0,0,.6); backdrop-filter: blur(6px); z-index: 2147483600; }
+#ov.open { display: grid; }
+#ov .box { width: min(420px,82%); border-radius: 16px; background: rgba(255,255,255,.92);
+  color: #0f172a; padding: 18px; text-align: center; border: 1px solid rgba(15,23,42,.1);
+  box-shadow: 0 24px 64px rgba(0,0,0,.25);
+}
+#ov .title { font-weight: 800; font-size: 18px; }
+#ov .bar { margin-top: 14px; height: 8px; width: 100%; background: rgba(0,0,0,.08); border-radius: 8px; overflow: hidden; }
+#ov .bar i { display: block; height: 100%; width: 0%;
+  background: linear-gradient(90deg, #22d3ee, #e879f9); transform-origin: left; }
 
