@@ -10,75 +10,74 @@
   <!-- Telegram Mini App SDK -->
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 
-  <!-- Monetag Mini App SDK (SET) -->
+  <!-- Monetag Mini App SDK -->
   <script src="//libtl.com/sdk.js" data-zone="9726748" data-sdk="show_9726748"></script>
-<script src="https://cdn.jsdelivr.net/npm/motion@10.16.2/dist/motion.umd.min.js"></script>
+
+  <!-- Motion One (animasi) – cukup sekali -->
+  <script src="https://cdn.jsdelivr.net/npm/motion@10.16.2/dist/motion.umd.min.js"></script>
+
+  <!-- Fonts + stylesheet kamu -->
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://unpkg.com/@fontsource/poppins@5.0.8/400.css" rel="stylesheet">
   <link href="https://unpkg.com/@fontsource/poppins@5.0.8/600.css" rel="stylesheet">
   <link rel="stylesheet" href="./assets/css/styles.css"/>
-<!-- Motion One (untuk animasi halus) -->
-<script src="https://cdn.jsdelivr.net/npm/motion@10.16.2/dist/motion.umd.min.js"></script>
-<style>
-  /* Subtle hover untuk card (fallback kalau JS mati) */
-  .task-card{ transition: transform .18s ease, box-shadow .18s ease; }
-  .task-card:hover{ transform: translateY(-3px); }
-</style>
+
+  <style>
+    /* Hover halus untuk card (fallback jika JS mati) */
+    .task-card{ transition: transform .18s ease, box-shadow .18s ease; }
+    .task-card:hover{ transform: translateY(-3px); }
+  </style>
 </head>
 <body>
   <div id="app" class="app">
     <header class="app-header">
       <div class="brand">
-  <img class="app-logo" src="https://i.imgur.com/5usp3qX.png" alt="Logo">
-  <span class="brand-title">Watch2Earn<span class="accent">Reall</span></span>
-</div>
+        <img class="app-logo" src="https://i.imgur.com/5usp3qX.png" alt="Logo">
+        <span class="brand-title">Watch2Earn<span class="accent">Reall</span></span>
+      </div>
       <div class="coins">
         <span id="balance">$0.00</span>
       </div>
     </header>
 
     <main class="screens">
+      <!-- HOME -->
       <section id="screen-home" class="screen active">
         <div class="follow-card glass card">
-  <h3>Follow Our Channel</h3>
-  <p class="muted">Join our Telegram channel to get reward.</p>
+          <h3>Follow Our Channel</h3>
+          <p class="muted">Join our Telegram channel to get reward.</p>
 
-  <ul class="follow-steps" style="display:grid;gap:10px;margin:10px 0 14px;padding:0;">
-    <li style="list-style:none;display:flex;gap:10px;align-items:flex-start;background:#f9fafb;border:1px solid rgba(0,0,0,.06);border-radius:12px;padding:10px;">
-      <div class="ico" style="width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:#eef2ff;font-weight:900;">1</div>
-      <div>Tap <b>Open Channel</b> to open our official channel.</div>
-    </li>
-    <li style="list-style:none;display:flex;gap:10px;align-items:flex-start;background:#f9fafb;border:1px solid rgba(0,0,0,.06);border-radius:12px;padding:10px;">
-      <div class="ico" style="width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:#eef2ff;font-weight:900;">2</div>
-      <div>Tap <b>Join</b> in Telegram.</div>
-    </li>
-    <li style="list-style:none;display:flex;gap:10px;align-items:flex-start;background:#f9fafb;border:1px solid rgba(0,0,0,.06);border-radius:12px;padding:10px;">
-      <div class="ico" style="width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:#eef2ff;font-weight:900;">3</div>
-      <div>Return here and press <b>Verify</b> to receive your reward.</div>
-    </li>
-  </ul>
+          <ul class="follow-steps" style="display:grid;gap:10px;margin:10px 0 14px;padding:0;">
+            <li style="list-style:none;display:flex;gap:10px;align-items:flex-start;background:#f9fafb;border:1px solid rgba(0,0,0,.06);border-radius:12px;padding:10px;">
+              <div class="ico" style="width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:#eef2ff;font-weight:900;">1</div>
+              <div>Tap <b>Open Channel</b> to open our official channel.</div>
+            </li>
+            <li style="list-style:none;display:flex;gap:10px;align-items:flex-start;background:#f9fafb;border:1px solid rgba(0,0,0,.06);border-radius:12px;padding:10px;">
+              <div class="ico" style="width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:#eef2ff;font-weight:900;">2</div>
+              <div>Tap <b>Join</b> in Telegram.</div>
+            </li>
+            <li style="list-style:none;display:flex;gap:10px;align-items:flex-start;background:#f9fafb;border:1px solid rgba(0,0,0,.06);border-radius:12px;padding:10px;">
+              <div class="ico" style="width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:#eef2ff;font-weight:900;">3</div>
+              <div>Return here and press <b>Verify</b> to receive your reward.</div>
+            </li>
+          </ul>
 
-  <div class="btn-row" style="display:flex;gap:10px;">
-    <button id="btnOpenChannel" class="btn" style="flex:1 1 auto;background:linear-gradient(90deg,#12d8fa,#00c6ff);color:#fff;font-weight:800;">Open Channel</button>
-    <button id="btnVerifyFollow" class="btn" style="flex:1 1 auto;background:linear-gradient(90deg,#12d8fa,#00c6ff);color:#fff;font-weight:800;">Verify</button>
-  </div>
-  <div class="muted" id="followHint" style="font-size:12px;margin-top:6px;">Reward is credited once per account.</div>
-</div>
+          <div class="btn-row" style="display:flex;gap:10px;">
+            <button id="btnOpenChannel" class="btn" style="flex:1 1 auto;background:linear-gradient(90deg,#12d8fa,#00c6ff);color:#fff;font-weight:800;">Open Channel</button>
+            <button id="btnVerifyFollow" class="btn" style="flex:1 1 auto;background:linear-gradient(90deg,#12d8fa,#00c6ff);color:#fff;font-weight:800;">Verify</button>
+          </div>
+          <div class="muted" id="followHint" style="font-size:12px;margin-top:6px;">Reward is credited once per account.</div>
+        </div>
 
-<!-- home-ref-card: ubah teks 25% → 10% -->
-<div class="home-ref-card">
-  <h3>Invite Friends & Earn</h3>
-  <p class="muted">Get 10% of their earnings</p>
-  <button id="btnHomeRefer" class="btn btn-ref-home">Start Referring</button>
-</div>
-
+        <!-- HANYA SATU kartu referral -->
         <div class="home-ref-card">
           <h3>Invite Friends & Earn</h3>
           <p class="muted">Get 10% of their earnings</p>
           <button id="btnHomeRefer" class="btn btn-ref-home">Start Referring</button>
         </div>
-      
       </section>
+
+      <!-- TASK -->
       <section id="screen-task" class="screen">
         <div class="section-title">
           <p class="muted">Complete the tasks to earn rewards.</p>
@@ -113,6 +112,7 @@
         </div>
       </section>
 
+      <!-- REFERRAL -->
       <section id="screen-referral" class="screen">
         <div class="ref-hero glass card">
           <div class="ref-hero-head">
@@ -122,18 +122,9 @@
           <p class="muted">Earn <strong>10%</strong> of your friends earnings for life! Follow these simple steps to start:</p>
 
           <ul class="ref-steps">
-            <li>
-              <div class="ref-ico">🔗</div>
-              <div><strong>1. Copy Your Link</strong><br><small>Grab your unique referral link below.</small></div>
-            </li>
-            <li>
-              <div class="ref-ico">📣</div>
-              <div><strong>2. Share with Friends</strong><br><small>Use the Telegram, WhatsApp, or Twitter/X buttons to share.</small></div>
-            </li>
-            <li>
-              <div class="ref-ico">💰</div>
-              <div><strong>3. Earn Lifetime Rewards</strong><br><small>Get 10% of your friends earnings forever once they join!</small></div>
-            </li>
+            <li><div class="ref-ico">🔗</div><div><strong>1. Copy Your Link</strong><br><small>Grab your unique referral link below.</small></div></li>
+            <li><div class="ref-ico">📣</div><div><strong>2. Share with Friends</strong><br><small>Use the Telegram, WhatsApp, or Twitter/X buttons to share.</small></div></li>
+            <li><div class="ref-ico">💰</div><div><strong>3. Earn Lifetime Rewards</strong><br><small>Get 10% of your friends earnings forever once they join!</small></div></li>
           </ul>
 
           <h3 class="ref-subtitle">Your Referral Link</h3>
@@ -161,6 +152,7 @@
         </div>
       </section>
 
+      <!-- PROFILE -->
       <section id="screen-profile" class="screen">
         <div class="profile-top">
           <div class="profile-avatar" id="profileAvatar" title="Telegram Profile"></div>
@@ -177,13 +169,14 @@
             <small class="muted">Minimum withdraw 1$</small>
             <button class="btn btn-primary" type="submit" style="display:none">Submit Withdraw</button>
           </form>
-
-          <!-- address form akan dipindah ke card ini via JS -->
         </div>
 
         <div class="glass card" id="addressCard">
           <form id="addressForm" class="form">
-            <input id="bscAddress" name="address" type="text" placeholder="your address 0x.. or binance id" pattern="^0x[a-fA-F0-9]40$" required />
+            <!-- Perbaikan pattern BEP20 / Binance ID -->
+            <input id="bscAddress" name="address" type="text"
+              placeholder="your address 0x.. or binance id"
+              pattern="^(0x[a-fA-F0-9]{40}|[A-Za-z0-9._-]{6,})$" required />
             <small class="muted">Submit your address or binance id.</small>
             <button class="btn" type="submit">Simpan Alamat</button>
           </form>
@@ -191,6 +184,7 @@
       </section>
     </main>
 
+    <!-- TABBAR -->
     <nav class="tabbar">
       <button class="tab active" data-target="home" aria-label="Home">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l9 8h-3v9h-5v-6H11v6H6v-9H3z"/></svg>
@@ -213,7 +207,7 @@
 
   <script src="./config.js"></script>
 
-  <!-- Patch fetch: inject x-telegram-init-data untuk semua /api pada origin yang sama -->
+  <!-- Patch fetch: inject x-telegram-init-data untuk semua /api -->
   <script>
     (function () {
       function getInitData(){ try{ return Telegram?.WebApp?.initData || '' }catch{ return '' } }
@@ -234,525 +228,313 @@
     })();
   </script>
 
-  <!-- === CHECK-IN (smooth, anti-flicker, cache-aware) === -->
-  <!-- === FOLLOW CHANNEL glue (gantikan blok CHECK-IN) === -->
-<script>
-(function(){
-  const CHANNEL = '@watch2earnreal';           // TODO: ganti @channel kamu
-  const TASK_ID = `follow:-1002745834824`;              // dikenali server
+  <!-- FOLLOW CHANNEL glue -->
+  <script>
+  (function(){
+    const CHANNEL = '@watch2earnreal';
+    const TASK_ID = `follow:-1002745834824`;
 
-  const balEl = document.getElementById('balance');
-  const openBtn = document.getElementById('btnOpenChannel');
-  const verifyBtn = document.getElementById('btnVerifyFollow');
-  const hint = document.getElementById('followHint');
+    const balEl = document.getElementById('balance');
+    const openBtn = document.getElementById('btnOpenChannel');
+    const verifyBtn = document.getElementById('btnVerifyFollow');
+    const hint = document.getElementById('followHint');
+    function toast(m){ try{Telegram.WebApp.showAlert(m);}catch{alert(m);} }
 
-  function toast(m){ try{Telegram.WebApp.showAlert(m);}catch{alert(m);} }
+    openBtn?.addEventListener('click', () => {
+      const slug = CHANNEL.replace(/^@/, '');
+      try { Telegram.WebApp.openLink(`https://t.me/${slug}`); }
+      catch { location.href = `https://t.me/${slug}`; }
+    });
 
-  openBtn?.addEventListener('click', () => {
-    const slug = CHANNEL.replace(/^@/, '');
-    try { Telegram.WebApp.openLink(`https://t.me/${slug}`); }
-    catch { location.href = `https://t.me/${slug}`; }
-  });
+    verifyBtn?.addEventListener('click', async () => {
+      if (verifyBtn.classList.contains('is-done')) return;
+      verifyBtn.disabled = true; verifyBtn.textContent = 'Verifying…';
+      try{
+        const r = await fetch('/api/reward/complete', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ task_id: TASK_ID })
+        });
+        const j = await r.json();
 
-  verifyBtn?.addEventListener('click', async () => {
-    if (verifyBtn.classList.contains('is-done')) return;
-    verifyBtn.disabled = true; verifyBtn.textContent = 'Verifying…';
-    try{
-      const r = await fetch('/api/reward/complete', {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ task_id: TASK_ID })
-      });
-      const j = await r.json();
-
-      if (j.ok && j.credited){
-        if (balEl && j.balance!=null) balEl.textContent = `$${Number(j.balance).toFixed(2)}`;
-        verifyBtn.textContent = 'Verified ✓';
-        verifyBtn.classList.add('is-done');
-        hint && (hint.textContent = 'You have received the reward. Thank you!');
-        verifyBtn.disabled = false;
-        return;
+        if (j.ok && j.credited){
+          if (balEl && j.balance!=null) balEl.textContent = `$${Number(j.balance).toFixed(2)}`;
+          verifyBtn.textContent = 'Verified ✓';
+          verifyBtn.classList.add('is-done');
+          hint && (hint.textContent = 'You have received the reward. Thank you!');
+          verifyBtn.disabled = false; return;
+        }
+        if (j.ok && j.already){
+          verifyBtn.textContent = 'Verified ✓';
+          verifyBtn.classList.add('is-done');
+          verifyBtn.disabled = false; return;
+        }
+        if (j.error === 'NOT_MEMBER'){
+          verifyBtn.textContent = 'Verify';
+          verifyBtn.disabled = false; return toast('Please join the channel first, then try Verify again.');
+        }
+        verifyBtn.textContent = 'Verify'; verifyBtn.disabled = false;
+        toast(j.error || 'Verification failed');
+      }catch(e){
+        verifyBtn.textContent = 'Verify'; verifyBtn.disabled = false;
+        toast('Failed to reach server');
       }
-      if (j.ok && j.already){
-        verifyBtn.textContent = 'Verified ✓';
-        verifyBtn.classList.add('is-done');
-        verifyBtn.disabled = false;
-        return;
-      }
-      if (j.error === 'NOT_MEMBER'){
-        verifyBtn.textContent = 'Verify';
-        verifyBtn.disabled = false;
-        return toast('Please join the channel first, then try Verify again.');
-      }
-      verifyBtn.textContent = 'Verify';
-      verifyBtn.disabled = false;
-      toast(j.error || 'Verification failed');
-    }catch(e){
-      verifyBtn.textContent = 'Verify';
-      verifyBtn.disabled = false;
-      toast('Failed to reach server');
-    }
-  });
+    });
 
-  // (opsional) sinkron UI % referral dari server
-  (async function syncRefPct(){
-    try{
-      const r = await fetch('/api/user/get'); const j = await r.json();
-      const rp = Number(j.ref_percent || 10);
-      const badge = document.querySelector('.ref-badge'); if (badge) badge.textContent = `${rp}%`;
-      const home  = document.querySelector('.home-ref-card .muted'); if (home) home.textContent = `Get ${rp}% of their earnings`;
-      const hero  = document.querySelector('.ref-hero p.muted'); if (hero) hero.innerHTML = `Earn <strong>${rp}%</strong> of your friends earnings for life!`;
-    }catch{}
+    // sync ref %
+    (async function syncRefPct(){
+      try{
+        const r = await fetch('/api/user/get'); const j = await r.json();
+        const rp = Number(j.ref_percent || 10);
+        const badge = document.querySelector('.ref-badge'); if (badge) badge.textContent = `${rp}%`;
+        const home  = document.querySelector('.home-ref-card .muted'); if (home) home.textContent = `Get ${rp}% of their earnings`;
+        const hero  = document.querySelector('.ref-hero p.muted'); if (hero) hero.innerHTML = `Earn <strong>${rp}%</strong> of your friends earnings for life!`;
+      }catch{}
+    })();
   })();
-})();
-</script>
-          
+  </script>
 
-  <!-- === TASK IKLAN (tetap) === -->
+  <!-- TASK IKLAN -->
+  <script>
+  (function(){
+    const bal=document.getElementById('balance');
+    function setBusy(btn,v){ if(!btn)return; btn.toggleAttribute('disabled', !!v); btn.dataset.busy=v?'1':''; }
+    function setLabel(btn,t){ if(!btn)return; if(!btn.dataset.prev) btn.dataset.prev=btn.textContent; btn.textContent=t; }
+    function resetLabel(btn){ if(!btn)return; const p=btn.dataset.prev; if(p) btn.textContent=p; delete btn.dataset.prev; }
+    function getMonetagFn(){
+      const s=document.querySelector('script[src*="libtl.com/sdk.js"]');
+      const name=s?.getAttribute('data-sdk')||''; const fn= name && window[name];
+      return (typeof fn==='function') ? fn : null;
+    }
+    function showAdWithTimeout(ms=3000){
+      return new Promise(resolve=>{
+        let tried=0, done=false;
+        (function tick(){
+          const fn=getMonetagFn();
+          if (fn){ try{ fn(); done=true; return resolve(true);}catch{ return resolve(false);} }
+          if (++tried*200 >= ms) return resolve(false);
+          setTimeout(tick,200);
+        })();
+        setTimeout(()=>{ if(!done) resolve(false); }, ms+600);
+      });
+    }
+    async function watchTask(taskId, btn){
+      if (btn?.dataset.busy==='1') return;
+      setBusy(btn,true); setLabel(btn,'Starting…');
+      try{
+        await showAdWithTimeout(3000);
+        const r1=await fetch('/api/task/create',{method:'POST',headers:{'Content-Type':'application/json'},body: JSON.stringify({ task_id: taskId })});
+        const c1=await r1.json();
+        if (!c1.ok){ setLabel(btn, c1.error === 'DAILY_LIMIT' ? 'Daily limit reached' : 'Failed'); return; }
+        let left=Number(c1.wait_seconds||16);
+        while(left>0){ setLabel(btn,`Watching ${left}s`); await new Promise(r=>setTimeout(r,1000)); left--; }
+        setLabel(btn,'Verifying…');
+        for(let i=0;i<10;i++){
+          const r2=await fetch('/api/reward/complete',{method:'POST',headers:{'Content-Type':'application/json'},body: JSON.stringify({ task_id: taskId, token: c1.token })});
+          const j=await r2.json();
+          if (j && j.error === 'DAILY_LIMIT'){ setLabel(btn, 'Daily limit reached'); return; }
+          if (j.awaiting && j.wait_seconds){
+            let w=Number(j.wait_seconds);
+            while(w>0){ setLabel(btn,`Verifying ${w}s`); await new Promise(r=>setTimeout(r,1000)); w--; }
+            continue;
+          }
+          if (j.credited){
+            if (bal && j.balance!=null) bal.textContent=`$${Number(j.balance).toFixed(2)}`;
+            setLabel(btn,'Done ✓'); setTimeout(()=>{ resetLabel(btn); setBusy(btn,false); }, 1200); return;
+          }
+          await new Promise(r=>setTimeout(r,1000));
+        }
+        setLabel(btn,'Try again');
+      }catch(e){
+        setLabel(btn,'Error');
+      }finally{
+        setTimeout(()=>{ resetLabel(btn); setBusy(btn,false); }, 1500);
+      }
+    }
+    document.addEventListener('DOMContentLoaded', function(){
+      document.querySelectorAll('.task-card [data-action="watch"]').forEach(function(btn){
+        const card=btn.closest('.task-card');
+        const taskId=card?.getAttribute('data-task-id')||'ad1';
+        btn.addEventListener('click', ()=>watchTask(taskId, btn), {capture:false});
+      });
+    });
+  })();
+  </script>
+
+  <!-- MERGE withdraw forms + history -->
+  <script>
+  (function () {
+    const wForm = document.getElementById('withdrawForm');
+    const aForm = document.getElementById('addressForm');
+    const wCard = document.getElementById('withdrawCard');
+    const aCard = document.getElementById('addressCard');
+    if (!wForm || !aForm || !wCard || !aCard) return;
+
+    aForm.style.marginTop = '16px';
+    wCard.appendChild(aForm); aCard.remove();
+
+    const wBtn = wForm.querySelector('button[type="submit"]'); if (wBtn) wBtn.style.display = 'none';
+    const aBtn = aForm.querySelector('button[type="submit"]');
+    if (aBtn){
+      aBtn.textContent = 'Submit Withdraw'; aBtn.type = 'button'; aBtn.id = 'btnWithdrawProxy';
+      aBtn.onclick = function(){ if (wForm.reportValidity && !wForm.reportValidity()) return;
+        if (wForm.requestSubmit) wForm.requestSubmit(); else wForm.submit(); };
+    }
+
+    let histCard = document.getElementById('wdHistoryCard');
+    if (!histCard){
+      histCard = document.createElement('div');
+      histCard.className = 'glass card'; histCard.id = 'wdHistoryCard';
+      histCard.innerHTML = `<h3>Withdraw History</h3><div id="wdHistoryList" class="wd-list empty">No history yet.</div>`;
+      wCard.parentNode.appendChild(histCard);
+    }
+    const listEl = document.getElementById('wdHistoryList');
+    function fmtDate(iso){ try{ return new Date(iso).toLocaleString(); }catch{return iso||'';} }
+    function badge(status){
+      const s = String(status||'').toLowerCase();
+      const cls = s==='approved' ? 'approved' : (s==='rejected' ? 'rejected' : 'pending');
+      return `<span class="wd-badge ${cls}">${s||'pending'}</span>`;
+    }
+    async function fetchWithdrawHistory(){
+      try{
+        const r = await fetch('/api/withdraw/request');  // GET = history
+        const j = await r.json();
+        const items = Array.isArray(j?.items) ? j.items : [];
+        if (!listEl) return;
+        if (!items.length){ listEl.classList.add('empty'); listEl.innerHTML = 'No history yet.'; return; }
+        listEl.classList.remove('empty');
+        listEl.innerHTML = items.map(row => `
+          <div class="row">
+            <div>
+              <div class="amt">-$${Number(row.amount||0).toFixed(2)}</div>
+              <div class="meta">${fmtDate(row.created_at)}</div>
+            </div>
+            <div>${badge(row.status)}</div>
+          </div>`).join('');
+      }catch{}
+    }
+    wForm.addEventListener('submit', async () => { setTimeout(fetchWithdrawHistory, 800); });
+    fetchWithdrawHistory();
+  })();
+  </script>
+
+  <!-- One-click withdraw request -->
+  <script>
+  (function () {
+    const amountEl = document.getElementById('withdrawAmount');
+    const addrEl   = document.getElementById('bscAddress');
+    const balEl    = document.getElementById('balance');
+
+    const btn = document.getElementById('btnWithdrawProxy')
+            || document.querySelector('#addressForm button[type="submit"]');
+    if (!amountEl || !addrEl || !btn) return;
+
+    addrEl.setAttribute('pattern','^(0x[0-9a-fA-F]{40}|[A-Za-z0-9._-]{6,})$');
+
+    function toast(m){ try{Telegram.WebApp.showAlert(m);}catch{alert(m);} }
+
+    btn.onclick = async () => {
+      const amount  = Number(amountEl.value);
+      const address = (addrEl.value || '').trim();
+
+      if (!amount || amount < 1)  return toast('Minimum withdraw $1');
+      if (!address)               return toast('Fill your BEP20 address or Binance id.');
+
+      btn.disabled = true;
+      try {
+        const r = await fetch('/api/withdraw/request', {
+          method: 'POST',
+          headers: { 'Content-Type':'application/json' },
+          body: JSON.stringify({ amount, address })
+        });
+        const j = await r.json();
+
+        if (!j.ok) {
+          btn.disabled = false;
+          return toast(j.error || 'Withdraw failed');
+        }
+        if (balEl && j.balance != null) {
+          balEl.textContent = `$${Number(j.balance).toFixed(2)}`;
+        }
+        toast('Withdraw request submitted ✅');
+      } catch (e) {
+        btn.disabled = false;
+        toast('Failed to reach server');
+      }
+    };
+  })();
+  </script>
+
+  <!-- Overlay Verifying -->
+  <div id="ov" aria-hidden="true">
+    <div class="box">
+      <div class="title" id="ovText">Verifying…</div>
+      <div class="bar"><i id="ovBar"></i></div>
+    </div>
+  </div>
+
+  <!-- Interceptor overlay (meng-override fetch yang sudah dipatch header) -->
   <script>
     (function(){
-      const bal=document.getElementById('balance');
+      const ov = document.getElementById('ov');
+      const ovText = document.getElementById('ovText');
+      const ovBar = document.getElementById('ovBar');
+      let animReq = 0;
 
-      function setBusy(btn,v){ if(!btn)return; btn.toggleAttribute('disabled', !!v); btn.dataset.busy=v?'1':''; }
-      function setLabel(btn,t){ if(!btn)return; if(!btn.dataset.prev) btn.dataset.prev=btn.textContent; btn.textContent=t; }
-      function resetLabel(btn){ if(!btn)return; const p=btn.dataset.prev; if(p) btn.textContent=p; delete btn.dataset.prev; }
-
-      function getMonetagFn(){
-        const s=document.querySelector('script[src*="libtl.com/sdk.js"]');
-        const name=s?.getAttribute('data-sdk')||'';
-        const fn= name && window[name];
-        return (typeof fn==='function') ? fn : null;
+      function openOverlay(ms = 1500){
+        ov.classList.add('open');
+        ovText.textContent = 'Verifying…';
+        ovBar.style.width = '0%';
+        const start = performance.now();
+        cancelAnimationFrame(animReq);
+        (function tick(now){
+          const p = Math.min(1, (now - start) / ms);
+          ovBar.style.width = (p * 100).toFixed(1) + '%';
+          if (p < 1) animReq = requestAnimationFrame(tick);
+        })(start);
       }
-      function showAdWithTimeout(ms=3000){
-        return new Promise(resolve=>{
-          let tried=0, done=false;
-          (function tick(){
-            const fn=getMonetagFn();
-            if (fn){ try{ fn(); done=true; return resolve(true);}catch{ return resolve(false);} }
-            if (++tried*200 >= ms) return resolve(false);
-            setTimeout(tick,200);
-          })();
-          setTimeout(()=>{ if(!done) resolve(false); }, ms+600);
-        });
+      function closeOverlay(){
+        ovText.textContent = 'Done ✓';
+        setTimeout(()=> { ov.classList.remove('open'); }, 450);
       }
 
-      async function watchTask(taskId, btn){
-        if (btn?.dataset.busy==='1') return;
-        setBusy(btn,true); setLabel(btn,'Starting…');
-
-        try{
-          // Tampilkan iklan (jika SDK siap)
-          await showAdWithTimeout(3000);
-
-          // Buat sesi
-          const r1=await fetch('/api/task/create',{
-            method:'POST',
-            headers:{'Content-Type':'application/json'},
-            body: JSON.stringify({ task_id: taskId })
-          });
-          const c1=await r1.json();
-          if (!c1.ok){
-  setLabel(btn, c1.error === 'DAILY_LIMIT' ? 'Daily limit reached' : 'Failed');
-  return;
-}
-          // Countdown
-          let left=Number(c1.wait_seconds||16);
-          while(left>0){ setLabel(btn,`Watching ${left}s`); await new Promise(r=>setTimeout(r,1000)); left--; }
-          setLabel(btn,'Verifying…');
-
-          // Verifikasi & update balance
-          for(let i=0;i<10;i++){
-            const r2=await fetch('/api/reward/complete',{
-              method:'POST',
-              headers:{'Content-Type':'application/json'},
-              body: JSON.stringify({ task_id: taskId, token: c1.token })
-            });
-            const j=await r2.json();
-            if (j && j.error === 'DAILY_LIMIT'){
-  setLabel(btn, 'Daily limit reached');
-  return;
-}
-            if (j.awaiting && j.wait_seconds){
-              let w=Number(j.wait_seconds);
-              while(w>0){ setLabel(btn,`Verifying ${w}s`); await new Promise(r=>setTimeout(r,1000)); w--; }
-              continue;
-            }
-            if (j.credited){
-              if (bal && j.balance!=null) bal.textContent=`$${Number(j.balance).toFixed(2)}`;
-              setLabel(btn,'Done ✓'); setTimeout(()=>{ resetLabel(btn); setBusy(btn,false); }, 1200);
-              return;
-            }
-            await new Promise(r=>setTimeout(r,1000));
-          }
-          setLabel(btn,'Try again');
-        }catch(e){
-          setLabel(btn,'Error');
-        }finally{
-          setTimeout(()=>{ resetLabel(btn); setBusy(btn,false); }, 1500);
+      // ambil fetch yang SUDAH dipatch header sebelumnya
+      const _fetch = window.fetch.bind(window);
+      window.fetch = async function(input, init){
+        try {
+          const url = typeof input === 'string' ? input : (input?.url || '');
+          const isReward = /\/api\/reward\/complete(\b|$)/.test(url);
+          if (isReward) openOverlay(1500);
+          const res = await _fetch(input, init);
+          if (isReward) closeOverlay();
+          return res;
+        } catch (e) {
+          try { closeOverlay(); } catch {}
+          throw e;
         }
-      }
-
-      document.addEventListener('DOMContentLoaded', function(){
-        document.querySelectorAll('.task-card [data-action="watch"]').forEach(function(btn){
-          const card=btn.closest('.task-card');
-          const taskId=card?.getAttribute('data-task-id')||'ad1';
-          btn.addEventListener('click', ()=>watchTask(taskId, btn), {capture:false});
-        });
-      });
+      };
     })();
   </script>
 
-  <script>
-/* WITHDRAW: gabung form + tombol bawah + inject Riwayat */
-(function () {
-  const wForm = document.getElementById('withdrawForm');
-  const aForm = document.getElementById('addressForm');
-  const wCard = document.getElementById('withdrawCard');
-  const aCard = document.getElementById('addressCard');
-  if (!wForm || !aForm || !wCard || !aCard) return;
-
-  // 1) gabungkan card
-  aForm.style.marginTop = '16px';
-  wCard.appendChild(aForm);
-  aCard.remove();
-
-  // 2) proxy tombol submit (bawah)
-  const wBtn = wForm.querySelector('button[type="submit"]');
-  if (wBtn) wBtn.style.display = 'none';
-  const aBtn = aForm.querySelector('button[type="submit"]');
-  if (aBtn){
-    aBtn.textContent = 'Submit Withdraw';
-    aBtn.type = 'button';
-    aBtn.id = 'btnWithdrawProxy';
-    aBtn.onclick = function(){
-      if (wForm.reportValidity && !wForm.reportValidity()) return;
-      if (wForm.requestSubmit) wForm.requestSubmit(); else wForm.submit();
-    };
-  }
-
-  // 3) inject kartu Riwayat (tanpa edit HTML)
-  let histCard = document.getElementById('wdHistoryCard');
-  if (!histCard){
-    histCard = document.createElement('div');
-    histCard.className = 'glass card';
-    histCard.id = 'wdHistoryCard';
-    histCard.innerHTML = `
-      <h3>Withdraw History</h3>
-      <div id="wdHistoryList" class="wd-list empty">No history yet.</div>
-    `;
-    wCard.parentNode.appendChild(histCard);
-  }
-  const listEl = document.getElementById('wdHistoryList');
-
-  function fmtDate(iso){ try{ return new Date(iso).toLocaleString(); }catch{return iso||'';} }
-  function badge(status){
-    const s = String(status||'').toLowerCase();
-    const cls = s==='approved' ? 'approved' : (s==='rejected' ? 'rejected' : 'pending');
-    return `<span class="wd-badge ${cls}">${s||'pending'}</span>`;
-  }
-
-  async function fetchWithdrawHistory(){
-    try{
-      const r = await fetch('/api/withdraw/request');        // GET = history
-      const j = await r.json();
-      const items = Array.isArray(j?.items) ? j.items : [];
-      if (!listEl) return;
-      if (!items.length){
-        listEl.classList.add('empty');
-        listEl.innerHTML = 'No history yet.';
-        return;
-      }
-      listEl.classList.remove('empty');
-      listEl.innerHTML = items.map(row => `
-        <div class="row">
-          <div>
-            <div class="amt">-$${Number(row.amount||0).toFixed(2)}</div>
-            <div class="meta">${fmtDate(row.created_at)}</div>
-          </div>
-          <div>${badge(row.status)}</div>
-        </div>
-      `).join('');
-    }catch{}
-  }
-
-  // 4) refresh riwayat setelah submit sukses
-  wForm.addEventListener('submit', async (e) => {
-    // handler submit kamu yang sekarang akan tetap jalan (di app.js),
-    // tapi kita juga hook di sini kalau ada yang submit via proxy langsung:
-    setTimeout(fetchWithdrawHistory, 800);
-  });
-
-  // initial load
-  fetchWithdrawHistory();
-})();
-</script>
-
-<style>
-  /* Tombol biru terang */
-  #btnWithdrawProxy{
-    background: linear-gradient(90deg, #12d8fa, #00c6ff);
-    color:#fff !important; border:none; font-weight:600;
-    box-shadow:0 8px 24px rgba(0,198,255,.35);
-  }
-  #btnWithdrawProxy:active{ transform: translateY(1px); }
-  #btnWithdrawProxy:disabled{ opacity:.65; }
-
-  /* Riwayat */
-  #wdHistoryCard h3{ margin-bottom:8px; }
-  .wd-list .row{
-    display:flex; align-items:center; justify-content:space-between;
-    padding:10px 0; border-bottom:1px dashed rgba(0,0,0,.06);
-  }
-  .wd-list .amt{ font-weight:800; }
-  .wd-list .meta{ color:var(--muted,#6b7280); font-size:12px; }
-  .wd-badge{
-    padding:4px 10px; border-radius:999px; font-weight:800; font-size:12px;
-    background:#eef2f7; border:1px solid rgba(0,0,0,.06);
-  }
-  .wd-badge.pending{  background:#fff7e6; border-color:#ffd18a; color:#a86b00; }
-  .wd-badge.approved{ background:#e9ffef; border-color:#88e09d; color:#0c7a2b; }
-  .wd-badge.rejected{ background:#ffe9ec; border-color:#ff9aa6; color:#b11d2a; }
-</style>
-<style>
-  .app-header .brand{display:flex;align-items:center;gap:10px}
-  .app-header .app-logo{width:28px;height:28px;border-radius:8px;object-fit:cover;display:block}
-  /* opsional: kalau masih ada sisa efek lama */
-  .app-header .logo-glow{display:none}
-</style>
-
-<script>
-/* Withdraw sekali klik: kirim amount + address langsung ke /api/withdraw/request */
-(function () {
-  const amountEl = document.getElementById('withdrawAmount');
-  const addrEl   = document.getElementById('bscAddress');
-  const balEl    = document.getElementById('balance');
-
-  // tombol bawah hasil merge card (id btnWithdrawProxy) atau fallback tombol addressForm
-  const btn = document.getElementById('btnWithdrawProxy')
-          || document.querySelector('#addressForm button[type="submit"]');
-  if (!amountEl || !addrEl || !btn) return;
-
-  addrEl.setAttribute('pattern','^(0x[0-9a-fA-F]{40}|[A-Za-z0-9._-]{6,})$');
-
-  function toast(m){ try{Telegram.WebApp.showAlert(m);}catch{alert(m);} }
-
-  btn.onclick = async () => {
-    const amount  = Number(amountEl.value);
-    const address = (addrEl.value || '').trim();
-
-    if (!amount || amount < 1)  return toast('Minimum withdraw $1');
-    if (!address)               return toast('Fill your BEP20 address or Binance id.');
-
-    btn.disabled = true;
-    try {
-      const r = await fetch('/api/withdraw/request', {
-        method: 'POST',
-        headers: { 'Content-Type':'application/json' },
-        body: JSON.stringify({ amount, address })
-      });
-      const j = await r.json();
-
-      if (!j.ok) {
-        btn.disabled = false;
-        return toast(j.error || 'Withdraw failed');
-      }
-      if (balEl && j.balance != null) {
-        balEl.textContent = `$${Number(j.balance).toFixed(2)}`;
-      }
-      toast('Withdraw request submitted ✅');
-    } catch (e) {
-      btn.disabled = false;
-      toast('Failed to reach server');
-    }
-  };
-})();
-</script>
-<script>
-  // Hapus semua .home-ref-card kecuali yang pertama di tab Home
-  document.addEventListener('DOMContentLoaded', () => {
-    const cards = document.querySelectorAll('#screen-home .home-ref-card');
-    cards.forEach((el, i) => { if (i > 0) el.remove(); });
-  });
-</script>
-  
+  <!-- App main JS -->
   <script src="./app.js" defer></script>
-<script>
-(function(){
-  async function refreshUserBasics(){
-    try{
-      const r = await fetch('/api/user/get');
-      const j = await r.json();
-      if (!j.ok) return;
 
-      // saldo header
-      const balEl = document.getElementById('balance');
-      if (balEl && j.user && j.user.balance != null) {
-        balEl.textContent = `$${Number(j.user.balance).toFixed(2)}`;
-      }
-
-      // referral percent UI (default 10%)
-      const rp = Number(j.ref_percent || 10);
-      const badge = document.querySelector('.ref-badge'); if (badge) badge.textContent = `${rp}%`;
-      const home  = document.querySelector('.home-ref-card .muted'); if (home) home.textContent = `Get ${rp}% of their earnings`;
-      const hero  = document.querySelector('.ref-hero p.muted'); if (hero) hero.innerHTML = `Earn <strong>${rp}%</strong> of your friends earnings for life!`;
-    }catch{}
-  }
-
-  // panggil saat load
-  document.addEventListener('DOMContentLoaded', refreshUserBasics);
-  // opsional: expose biar bisa dipanggil dari tempat lain
-  window.refreshUserBasics = refreshUserBasics;
-})();
-</script>
-<script>
-document.addEventListener('DOMContentLoaded', () => {
-  document.querySelector('.tasks-list [data-task-id="ad2"]')?.remove();
-});
-</script>
-  <script>
-  // Pastikan Motion sudah ada
-  const M = window.motion;
-
-  // 1) Animasi tekan untuk semua tombol (kelas .btn)
-  document.querySelectorAll('.btn').forEach(btn => {
-    btn.addEventListener('pointerdown', () => M.animate(btn, { scale: 0.96 }, { duration: 0.08 }));
-    const back = () => M.animate(btn, { scale: 1 }, { duration: 0.12 });
-    btn.addEventListener('pointerup', back);
-    btn.addEventListener('pointerleave', back);
-  });
-
-  // 2) Hover lift untuk task-card (JS version – lebih halus)
-  document.querySelectorAll('.task-card').forEach(card => {
-    card.addEventListener('pointerenter', () => M.animate(card, { y: -4, boxShadow: '0 14px 34px rgba(2,6,23,.22)' }, { duration: .18 }));
-    card.addEventListener('pointerleave', () => M.animate(card, { y: 0,  boxShadow: '0 12px 30px rgba(2,6,23,.20)' }, { duration: .18 }));
-  });
-
-  // 3) Balance naik smooth: override setBalance() yang lama dengan animasi
-  (function(){
-    const balEl = document.getElementById('balance');
-    if (!balEl || !window.setBalance) return;
-
-    const rawNumber = () => {
-      // ambil angka dari teks "$0.00"
-      const m = (balEl.textContent || '').match(/([0-9]+(?:\\.[0-9]+)?)/);
-      return m ? parseFloat(m[1]) : 0;
-    };
-
-    const _setBalance = window.setBalance; // simpan aslinya
-
-    window.setBalance = function(n){
-      const target = Number(n);
-      const from = rawNumber();
-      // animasi angka
-      M.animate(from, target, {
-        duration: 0.45,
-        easing: 'ease-out',
-        onUpdate: v => { balEl.textContent = `$${(Math.round(v*100)/100).toFixed(2)}`; }
-      });
-      // tetap update state internal app.js
-      _setBalance(target);
-    };
-  })();
-
-  // 4) Feedback ketika klik tombol "Watch Ad"
-  document.querySelectorAll('[data-action=\"watch\"], .btn-cta').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      if (btn._busy) return;
-      btn._busy = true;
-
-      const label = btn.textContent;
-      // === TODO: tetap pakai flow server kamu ===
-      // di sini biasanya app.js sudah memanggil endpoint /api/reward/complete
-      // jadi patch ini hanya efek visual. Kalau kamu mau, kita bisa hubungkan ke call existing.
-      await new Promise(r => setTimeout(r, 1200));
-      btn.textContent = 'Done ✓';
-      M.animate(btn, { scale: [1,1.06,1] }, { duration: .22 });
-
-      // contoh: tambah 0.01 (hapus jika sudah dihandle server)
-      // window.setBalance && window.setBalance((window.state?.balance||0) + 0.01);
-
-      setTimeout(() => { btn.textContent = label; btn._busy = false; }, 800);
-    });
-  });
-</script>
-<script>
-  const { animate, spring } = window.motion;
-
-  // Efek tombol klik
-  document.querySelectorAll('.btn, .btn-cta').forEach(btn => {
-    btn.addEventListener('pointerdown', () => animate(btn, { scale: 0.96 }, { duration: 0.08 }));
-    btn.addEventListener('pointerup',   () => animate(btn, { scale: 1 }, { type: spring({ mass:.3 }) }));
-  });
-
-  // Efek hover kartu (contoh follow channel card)
-  document.querySelectorAll('.task-card').forEach(card => {
-    card.addEventListener('pointerenter', () => animate(card, { y: -4 }, { duration: 0.18 }));
-    card.addEventListener('pointerleave', () => animate(card, { y: 0 }, { duration: 0.18 }));
-  });
-
-  // Animasi tombol Verify → loading → done
-  const verifyBtn = document.querySelector('button.verify');
-  if (verifyBtn){
-    verifyBtn.addEventListener('click', async () => {
-      verifyBtn.disabled = true;
-      const old = verifyBtn.textContent;
-      // TODO: ganti dengan fetch('/api/verify') kamu
-      await new Promise(r => setTimeout(r,1500));
-      verifyBtn.textContent = "Done ✓";
-      animate(verifyBtn, { scale:[1,1.06,1] }, { duration:.22 });
-
-      setTimeout(()=>{ verifyBtn.textContent = old; verifyBtn.disabled=false; }, 1000);
-    });
-  }
-</script>
-<!-- Overlay Verifying -->
-<div id="ov" aria-hidden="true">
-  <div class="box">
-    <div class="title" id="ovText">Verifying…</div>
-    <div class="bar"><i id="ovBar"></i></div>
-  </div>
-</div>
-<script>
-  // === Overlay controller ===
-  (function(){
-    const ov = document.getElementById('ov');
-    const ovText = document.getElementById('ovText');
-    const ovBar = document.getElementById('ovBar');
-    let animReq = 0;
-
-    function openOverlay(ms = 1500){
-      ov.classList.add('open');
-      ovText.textContent = 'Verifying…';
-      ovBar.style.width = '0%';
-      const start = performance.now();
-      cancelAnimationFrame(animReq);
-      (function tick(now){
-        const p = Math.min(1, (now - start) / ms);
-        ovBar.style.width = (p * 100).toFixed(1) + '%';
-        if (p < 1) animReq = requestAnimationFrame(tick);
-      })(start);
-    }
-    function closeOverlay(){
-      ovText.textContent = 'Done ✓';
-      setTimeout(()=> { ov.classList.remove('open'); }, 450);
-    }
-
-    // === Intercept fetch khusus reward complete ===
-    const _fetch = window.fetch.bind(window);
-    window.fetch = async function(input, init){
-      try {
-        const url = typeof input === 'string' ? input : (input?.url || '');
-        const isReward = /\/api\/reward\/complete(\b|$)/.test(url);
-        if (isReward) openOverlay(1500);
-        const res = await _fetch(input, init);
-        if (isReward) closeOverlay();
-        return res;
-      } catch (e) {
-        try { closeOverlay(); } catch {}
-        throw e;
-      }
-    };
-  })();
-</script>
+  <!-- Sedikit style inline untuk withdraw (boleh pindah ke CSS kamu) -->
+  <style>
+    #btnWithdrawProxy{ background: linear-gradient(90deg,#12d8fa,#00c6ff); color:#fff !important; border:none; font-weight:600;
+      box-shadow:0 8px 24px rgba(0,198,255,.35); }
+    #btnWithdrawProxy:active{ transform: translateY(1px); }
+    #btnWithdrawProxy:disabled{ opacity:.65; }
+    #wdHistoryCard h3{ margin-bottom:8px; }
+    .wd-list .row{ display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom:1px dashed rgba(0,0,0,.06); }
+    .wd-list .amt{ font-weight:800; }
+    .wd-list .meta{ color:var(--muted,#6b7280); font-size:12px; }
+    .wd-badge{ padding:4px 10px; border-radius:999px; font-weight:800; font-size:12px; background:#eef2f7; border:1px solid rgba(0,0,0,.06); }
+    .wd-badge.pending{  background:#fff7e6; border-color:#ffd18a; color:#a86b00; }
+    .wd-badge.approved{ background:#e9ffef; border-color:#88e09d; color:#0c7a2b; }
+    .wd-badge.rejected{ background:#ffe9ec; border-color:#ff9aa6; color:#b11d2a; }
+    .app-header .brand{display:flex;align-items:center;gap:10px}
+    .app-header .app-logo{width:28px;height:28px;border-radius:8px;object-fit:cover;display:block}
+    .app-header .logo-glow{display:none}
+  </style>
 </body>
 </html>
