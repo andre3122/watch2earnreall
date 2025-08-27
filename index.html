@@ -525,5 +525,49 @@
     .app-header .app-logo{width:28px;height:28px;border-radius:8px;object-fit:cover;display:block}
     .app-header .logo-glow{display:none}
   </style>
+<script>
+(function(){
+  // Ambil saldo user saat app dibuka
+  async function loadInitialBalance(){
+    const el = document.getElementById('balance');
+    if (!el) return;
+
+    // tunggu initData Telegram siap sebentar (biar header auth ke-backend keisi)
+    const waitInit = (timeoutMs=800) => new Promise(res=>{
+      const start = performance.now();
+      (function tick(){
+        const ok = !!(window.Telegram && Telegram.WebApp && Telegram.WebApp.initData);
+        if (ok || performance.now()-start > timeoutMs) return res();
+        requestAnimationFrame(tick);
+      })();
+    });
+
+    try{
+      await waitInit(); // pastikan header x-telegram-init-data kepasang oleh patch fetch
+      const r = await fetch('/api/user/get', { credentials: 'include' });
+      const j = await r.json();
+
+      // Cari field balance yang valid (backend kamu kadang j.user.balance, kadang j.balance)
+      const vals = [
+        j && j.user && j.user.balance,
+        j && j.balance,
+        j && j.data && j.data.balance,
+        j && j.result && j.result.balance
+      ].map(Number).filter(v => Number.isFinite(v));
+
+      if (vals.length){
+        el.textContent = `$${vals[0].toFixed(2)}`;
+      }
+    }catch(e){
+      // diam aja kalau error; saldo bakal ter-update setelah task juga
+    }
+  }
+
+  // jalanin saat halaman siap
+  document.addEventListener('DOMContentLoaded', loadInitialBalance);
+  // kalau mau aman, panggil lagi sesaat setelah WebApp ready
+  try{ Telegram.WebApp.ready(); setTimeout(loadInitialBalance, 300); }catch{}
+})();
+</script>
 </body>
 </html>
