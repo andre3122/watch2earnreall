@@ -299,4 +299,10 @@ body.modal-open .tabbar{ pointer-events:none; opacity:.85; }
 #ov .bar { margin-top: 14px; height: 8px; width: 100%; background: rgba(0,0,0,.08); border-radius: 8px; overflow: hidden; }
 #ov .bar i { display: block; height: 100%; width: 0%;
   background: linear-gradient(90deg, #22d3ee, #e879f9); transform-origin: left; }
+/* Hilangkan ruang/kotak kosong di akhir halaman */
+main > *:last-child { margin-bottom: 0 !important; }
+.card:empty, .task-card:empty, .section:empty { display: none !important; }
+
+/* Pastikan overlay defaultnya benar-benar tak terlihat */
+#ov { display: none !important; }
 
