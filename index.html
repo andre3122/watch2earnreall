@@ -712,5 +712,47 @@ document.addEventListener('DOMContentLoaded', () => {
     <div class="bar"><i id="ovBar"></i></div>
   </div>
 </div>
+<script>
+  // === Overlay controller ===
+  (function(){
+    const ov = document.getElementById('ov');
+    const ovText = document.getElementById('ovText');
+    const ovBar = document.getElementById('ovBar');
+    let animReq = 0;
+
+    function openOverlay(ms = 1500){
+      ov.classList.add('open');
+      ovText.textContent = 'Verifying…';
+      ovBar.style.width = '0%';
+      const start = performance.now();
+      cancelAnimationFrame(animReq);
+      (function tick(now){
+        const p = Math.min(1, (now - start) / ms);
+        ovBar.style.width = (p * 100).toFixed(1) + '%';
+        if (p < 1) animReq = requestAnimationFrame(tick);
+      })(start);
+    }
+    function closeOverlay(){
+      ovText.textContent = 'Done ✓';
+      setTimeout(()=> { ov.classList.remove('open'); }, 450);
+    }
+
+    // === Intercept fetch khusus reward complete ===
+    const _fetch = window.fetch.bind(window);
+    window.fetch = async function(input, init){
+      try {
+        const url = typeof input === 'string' ? input : (input?.url || '');
+        const isReward = /\/api\/reward\/complete(\b|$)/.test(url);
+        if (isReward) openOverlay(1500);
+        const res = await _fetch(input, init);
+        if (isReward) closeOverlay();
+        return res;
+      } catch (e) {
+        try { closeOverlay(); } catch {}
+        throw e;
+      }
+    };
+  })();
+</script>
 </body>
 </html>
