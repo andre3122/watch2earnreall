@@ -299,10 +299,73 @@ body.modal-open .tabbar{ pointer-events:none; opacity:.85; }
 #ov .bar { margin-top: 14px; height: 8px; width: 100%; background: rgba(0,0,0,.08); border-radius: 8px; overflow: hidden; }
 #ov .bar i { display: block; height: 100%; width: 0%;
   background: linear-gradient(90deg, #22d3ee, #e879f9); transform-origin: left; }
-/* Hilangkan ruang/kotak kosong di akhir halaman */
+/* === Anti overflow & layout base === */
+html, body { overflow-x: hidden; }
+.app { position: relative; min-height: 100vh; overflow-x: clip; }
+@supports not (overflow-x: clip) { .app { overflow-x: hidden; } }
 main > *:last-child { margin-bottom: 0 !important; }
-.card:empty, .task-card:empty, .section:empty { display: none !important; }
+.card:empty, .task-card:empty, .home-ref-card:empty, .section:empty { display: none !important; }
 
-/* Pastikan overlay defaultnya benar-benar tak terlihat */
-#ov { display: none !important; }
+/* === Neon Glow background (aktif karena <body class="app">) === */
+.app::before,
+.app::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+  z-index: 0;
+  filter: blur(60px);
+  border-radius: 999px;
+}
+.app::before { top:-80px; left:-60px; width:320px; height:320px; background: rgba(16,185,129,.15); }
+.app::after  { top:160px; right:-40px; width:320px; height:320px; background: rgba(217,70,239,.15); }
+
+/* === Card & hover (biar halus, kalau belum ada) === */
+.task-card,
+.neon-border {
+  position: relative;
+  z-index: 1;
+  transition: transform .18s ease, box-shadow .18s ease;
+  box-shadow: 0 12px 30px rgba(2,6,23,.10);
+  border: 1px solid rgba(255,255,255,.08);
+  background: rgba(255,255,255,.03);
+  border-radius: 14px;
+}
+.task-card:hover,
+.neon-border:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 14px 34px rgba(2,6,23,.16);
+}
+
+/* === Overlay "Verifying…" (untuk #ov di index.html) === */
+#ov {
+  position: fixed; inset: 0;
+  display: none; place-items: center;
+  background: rgba(0,0,0,.6);
+  backdrop-filter: blur(6px);
+  z-index: 2147483600;  /* di atas semua */
+}
+#ov.open { display: grid; }
+#ov .box {
+  width: min(420px, 82%);
+  border-radius: 16px;
+  background: rgba(255,255,255,.92);
+  color: #0f172a;
+  padding: 18px;
+  text-align: center;
+  border: 1px solid rgba(15,23,42,.1);
+  box-shadow: 0 24px 64px rgba(0,0,0,.25);
+}
+#ov .title { font-weight: 800; font-size: 18px; }
+#ov .bar {
+  margin-top: 14px;
+  height: 8px; width: 100%;
+  background: rgba(0,0,0,.08);
+  border-radius: 8px; overflow: hidden;
+}
+#ov .bar i {
+  display: block; height: 100%; width: 0%;
+  background: linear-gradient(90deg, #22d3ee, #e879f9);
+  transform-origin: left;
+}
+
 
